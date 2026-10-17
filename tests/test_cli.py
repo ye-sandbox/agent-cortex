@@ -430,3 +430,16 @@ def test_cli_status_human_and_json(tmp_path: Path) -> None:
     assert data["profile"]["name"] == "balanced"
     assert "test-repo" in data["repositories"]
     assert data["repositories"]["test-repo"]["chunk_count"] == 42
+
+
+def test_cli_mcp_help() -> None:
+    result = runner.invoke(app, ["mcp", "--help"])
+    assert result.exit_code == 0
+    assert "Launch Model Context Protocol (MCP) stdio server" in result.stdout
+
+
+def test_cli_mcp_invokes_runner() -> None:
+    with patch("cortex.mcp_server.main") as mock_server_main:
+        result = runner.invoke(app, ["mcp"])
+        assert result.exit_code == 0
+        assert mock_server_main.called

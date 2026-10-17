@@ -205,3 +205,55 @@ class StorageManager:
         except Exception as exc:  # noqa: BLE001
             logger.warning("FTS search encountered error: %s", exc)
             return []
+
+    def get_chunks(
+        self,
+        where: str | None = None,
+        limit: int | None = None,
+        table_name: str = "chunks",
+    ) -> list[dict[str, Any]]:
+        """Retrieve chunks directly via SQL where filter without vector search."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        builder = tbl.search()
+        if where:
+            builder = builder.where(where)
+        if limit is not None:
+            builder = builder.limit(limit)
+        results: list[dict[str, Any]] = builder.to_list()
+        return results
+
+    def get_repo_contracts(
+        self,
+        repo: str,
+        categories: Sequence[str] | None = None,
+        limit: int = 50,
+        table_name: str = "chunks",
+    ) -> list[dict[str, Any]]:
+        """Retrieve contract, infrastructure, and invariant chunks for a repository."""
+        if table_name not in self.table_names():
+            return []
+        safe_repo = repo.strip().replace("'", "''")
+        target_categories = (
+            list(categories) if categories is not None else ["contract", "infra", "invariant"]
+        )
+        cat_list = ", ".join(f"'{c}'" for c in target_categories)
+        where = f"repo = '{safe_repo}' AND category IN ({cat_list})"
+        return self.get_chunks(where=where, limit=limit, table_name=table_name)
+
+    def get_technologies(
+        self,
+        repo: str | None = None,
+        table_name: str = "chunks",
+    ) -> list[dict[str, Any]]:
+        """Retrieve technology tags and repository associations across indexed chunks."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        builder = tbl.search().select(["repo", "tags", "file_path"])
+        if repo and repo.strip():
+            safe_repo = repo.strip().replace("'", "''")
+            builder = builder.where(f"repo = '{safe_repo}'")
+        results: list[dict[str, Any]] = builder.to_list()
+        return results

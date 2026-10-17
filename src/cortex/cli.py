@@ -625,6 +625,14 @@ def models_list() -> None:
     console.print(table)
 
 
+@app.command(name="mcp")
+def mcp_server_cmd() -> None:
+    """Launch Model Context Protocol (MCP) stdio server."""
+    from cortex.mcp_server import main as run_mcp_server
+
+    run_mcp_server()
+
+
 def main() -> None:
     """Main CLI execution entrypoint."""
     app()
