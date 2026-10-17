@@ -89,7 +89,7 @@ def bootstrap(
         typer.Option(
             "--profile",
             "-p",
-            help="Hardware profile tier to initialize (high, balanced, low).",
+            help="Hardware profile tier to initialize (high, balanced, low, code).",
         ),
     ] = None,
     config_path: Annotated[
@@ -350,7 +350,7 @@ def search(
         typer.Option(
             "--profile",
             "-p",
-            help="Hardware profile tier override (high, balanced, low).",
+            help="Hardware profile tier override (high, balanced, low, code).",
         ),
     ] = None,
     limit: Annotated[
@@ -1095,7 +1095,7 @@ def benchmark(
         typer.Option(
             "--profile",
             "-p",
-            help="Hardware profile tier override (high, balanced, low).",
+            help="Hardware profile tier override (high, balanced, low, code).",
         ),
     ] = None,
     rerank: Annotated[
@@ -1240,7 +1240,7 @@ def models_download(
         typer.Option(
             "--profile",
             "-p",
-            help="Hardware profile tier (high, balanced, low). Defaults to config profile.",
+            help="Hardware profile tier (high, balanced, low, code). Defaults to config profile.",
         ),
     ] = None,
     cache_dir: Annotated[

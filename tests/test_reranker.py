@@ -46,21 +46,28 @@ def test_reranker_profile_routing() -> None:
     assert reranker_balanced.resolved_model_name == "BAAI/bge-reranker-base"
     assert reranker_balanced.candidate_pool_size == 20
 
-    # 2. High profile (aliased to bge-reranker-v2-m3)
+    # 2. High profile (aliased to bge-reranker-v2-m3-int8)
     reranker_high = RerankerEngine(HardwareProfileName.HIGH)
     assert reranker_high.is_enabled is True
     assert reranker_high.model_name == "BAAI/bge-reranker-large"
-    assert reranker_high.resolved_model_name == "BAAI/bge-reranker-v2-m3"
+    assert reranker_high.resolved_model_name == "BAAI/bge-reranker-v2-m3-int8"
     assert reranker_high.candidate_pool_size == 30
 
-    # 3. Low profile (bypassed)
+    # 3. Code profile (jinaai/jina-reranker-v1-turbo-en)
+    reranker_code = RerankerEngine(HardwareProfileName.CODE)
+    assert reranker_code.is_enabled is True
+    assert reranker_code.model_name == "jinaai/jina-reranker-v1-turbo-en"
+    assert reranker_code.resolved_model_name == "jinaai/jina-reranker-v1-turbo-en"
+    assert reranker_code.candidate_pool_size == 25
+
+    # 4. Low profile (bypassed)
     reranker_low = RerankerEngine(HardwareProfileName.LOW)
     assert reranker_low.is_enabled is False
     assert reranker_low.model_name is None
     assert reranker_low.resolved_model_name is None
     assert reranker_low.candidate_pool_size == 0
 
-    # 4. Custom profile
+    # 5. Custom profile
     custom = HardwareProfile(
         name="custom-tier",
         embedding_model="custom/embed",
@@ -159,4 +166,4 @@ def test_reranker_precision_scoring_and_reordering() -> None:
 def test_reranker_model_alias_mapping() -> None:
     """Verifies that model alias mapping contains expected pairs."""
     assert "BAAI/bge-reranker-large" in RERANKER_MODEL_ALIASES
-    assert RERANKER_MODEL_ALIASES["BAAI/bge-reranker-large"] == "BAAI/bge-reranker-v2-m3"
+    assert RERANKER_MODEL_ALIASES["BAAI/bge-reranker-large"] == "BAAI/bge-reranker-v2-m3-int8"

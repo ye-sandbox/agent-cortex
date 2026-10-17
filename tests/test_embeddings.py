@@ -24,6 +24,13 @@ def test_embedding_engine_profile_resolution() -> None:
     assert engine_low.dim == 384
     assert engine_low.profile.max_threads == 2
 
+    engine_code = EmbeddingEngine(profile="code")
+    assert engine_code.profile.name == HardwareProfileName.CODE.value
+    assert engine_code.model_name == "jinaai/jina-embeddings-v2-base-code"
+    assert engine_code.resolved_model_name == "jinaai/jina-embeddings-v2-base-code"
+    assert engine_code.dim == 768
+    assert engine_code.profile.max_threads == 4
+
     custom_prof = HardwareProfile(
         name="custom_test",
         embedding_model="custom/model",
@@ -34,7 +41,27 @@ def test_embedding_engine_profile_resolution() -> None:
     )
     engine_custom = EmbeddingEngine(profile=custom_prof)
     assert engine_custom.model_name == "custom/model"
+    assert engine_custom.resolved_model_name == "custom/model"
     assert engine_custom.dim == 512
+
+
+def test_embedding_engine_model_aliases() -> None:
+    """Verify embedding model aliases maintain backward compatibility."""
+    from cortex.embeddings.engine import EMBEDDING_MODEL_ALIASES
+
+    assert "BAAI/bge-m3" in EMBEDDING_MODEL_ALIASES
+    assert EMBEDDING_MODEL_ALIASES["BAAI/bge-m3"] == "BAAI/bge-large-en-v1.5"
+
+    legacy_profile = HardwareProfile(
+        name="legacy",
+        embedding_model="BAAI/bge-m3",
+        embedding_dim=1024,
+        reranker_model=None,
+        reranker_enabled=False,
+    )
+    engine = EmbeddingEngine(profile=legacy_profile)
+    assert engine.model_name == "BAAI/bge-m3"
+    assert engine.resolved_model_name == "BAAI/bge-large-en-v1.5"
 
 
 def test_embedding_engine_lazy_loading() -> None:

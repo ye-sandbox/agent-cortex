@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
+from cortex.embeddings.engine import EMBEDDING_MODEL_ALIASES
 from cortex.models.profile import HardwareProfile
 from cortex.retrieval.reranker import RERANKER_MODEL_ALIASES
 
@@ -29,7 +30,7 @@ def download_embedding_model(
     """Download and cache embedding model weights locally using FastEmbed.
 
     Args:
-        model_name: Identifier of the FastEmbed embedding model.
+        model_name: Identifier of the FastEmbed embedding model (or alias).
         cache_dir: Optional custom local directory for ONNX cache.
 
     Returns:
@@ -38,12 +39,13 @@ def download_embedding_model(
     Raises:
         ModelDownloadError: If model cannot be downloaded due to network or invalid identifier.
     """
+    resolved_name = EMBEDDING_MODEL_ALIASES.get(model_name, model_name)
     try:
         from fastembed import TextEmbedding
 
         cache_str = str(cache_dir) if cache_dir else None
         embedding = TextEmbedding(
-            model_name=model_name,
+            model_name=resolved_name,
             cache_dir=cache_str,
             lazy_load=True,
         )

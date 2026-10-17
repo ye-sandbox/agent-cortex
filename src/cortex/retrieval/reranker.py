@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 # Model alias mapping for FastEmbed cross-encoder registry
 RERANKER_MODEL_ALIASES: dict[str, str] = {
-    "BAAI/bge-reranker-large": "BAAI/bge-reranker-v2-m3",
+    "BAAI/bge-reranker-large": "BAAI/bge-reranker-v2-m3-int8",
 }
 
 # Type alias for test hooks and hermetic execution

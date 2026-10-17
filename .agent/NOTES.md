@@ -43,9 +43,10 @@ $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 - **Lifecycle penalty:** If `lifecycle == "archived"`, candidate score is multiplied by `0.6` unless explicitly queried with `--include-archived`.
 - **Scope filtering:** Queries default to allowed scopes (`internal` and `public`). Confidential chunks require explicit `--scope confidential` or privileged credentials.
 - **Hardware Profiles Matrix:**
-  - `high`: `BAAI/bge-m3` (1024 dim) + `BAAI/bge-reranker-large` (top 30 -> top K)
+  - `high`: `BAAI/bge-large-en-v1.5` (1024 dim) + `BAAI/bge-reranker-large` (aliased to `BAAI/bge-reranker-v2-m3-int8`, top 30 -> top K)
   - `balanced` (Default): `BAAI/bge-small-en-v1.5` or `multilingual-e5-small` (384 dim) + `BAAI/bge-reranker-base` (top 20 -> top K)
   - `low`: `bge-small-en-v1.5` (384 dim), Reranker disabled (pure Stage 1 RRF, < 20ms)
+  - `code`: `jinaai/jina-embeddings-v2-base-code` (768 dim, 8k context) + `jinaai/jina-reranker-v1-turbo-en` (top 25 -> top K, 4 threads)
   - `custom`: Declared in `config.yaml`
 
 ### 4. Dynamic Configuration & Multi-Tenant Resolution

@@ -154,7 +154,7 @@ class CortexConfig(BaseModel):
 
     profile: HardwareProfileName = Field(
         default=HardwareProfileName.BALANCED,
-        description="Active hardware profile tier (high, balanced, low, custom)",
+        description="Active hardware profile tier (high, balanced, low, code, custom)",
     )
     custom_profile: HardwareProfile | None = Field(
         default=None,

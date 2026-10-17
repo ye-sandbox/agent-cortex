@@ -14,6 +14,7 @@ class HardwareProfileName(StrEnum):
     HIGH = "high"
     BALANCED = "balanced"
     LOW = "low"
+    CODE = "code"
     CUSTOM = "custom"
 
 
@@ -55,7 +56,7 @@ class HardwareProfile(BaseModel):
 PREDEFINED_PROFILES: dict[HardwareProfileName, HardwareProfile] = {
     HardwareProfileName.HIGH: HardwareProfile(
         name=HardwareProfileName.HIGH.value,
-        embedding_model="BAAI/bge-m3",
+        embedding_model="BAAI/bge-large-en-v1.5",
         embedding_dim=1024,
         reranker_model="BAAI/bge-reranker-large",
         reranker_enabled=True,
@@ -79,6 +80,15 @@ PREDEFINED_PROFILES: dict[HardwareProfileName, HardwareProfile] = {
         reranker_enabled=False,
         top_k_rerank=0,
         max_threads=2,
+    ),
+    HardwareProfileName.CODE: HardwareProfile(
+        name=HardwareProfileName.CODE.value,
+        embedding_model="jinaai/jina-embeddings-v2-base-code",
+        embedding_dim=768,
+        reranker_model="jinaai/jina-reranker-v1-turbo-en",
+        reranker_enabled=True,
+        top_k_rerank=25,
+        max_threads=4,
     ),
 }
 

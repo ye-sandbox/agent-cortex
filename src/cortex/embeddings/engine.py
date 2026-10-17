@@ -16,6 +16,11 @@ from cortex.models.profile import (
 
 logger = logging.getLogger(__name__)
 
+# Model alias mapping for FastEmbed embedding models to ensure backward compatibility
+EMBEDDING_MODEL_ALIASES: dict[str, str] = {
+    "BAAI/bge-m3": "BAAI/bge-large-en-v1.5",
+}
+
 # Type aliases for testing hooks
 EmbedPassageFn = Callable[[Sequence[str]], list[list[float]]]
 EmbedQueryFn = Callable[[str], list[float]]
@@ -51,6 +56,11 @@ class EmbeddingEngine:
         return self.profile.embedding_model
 
     @property
+    def resolved_model_name(self) -> str:
+        """Return upstream FastEmbed model identifier taking aliases into account."""
+        return EMBEDDING_MODEL_ALIASES.get(self.model_name, self.model_name)
+
+    @property
     def dim(self) -> int:
         """Return the vector dimensionality."""
         return self.profile.embedding_dim
@@ -63,11 +73,11 @@ class EmbeddingEngine:
             cache_str = str(self.cache_dir) if self.cache_dir else None
             logger.info(
                 "Initializing FastEmbed model '%s' with %d threads",
-                self.model_name,
+                self.resolved_model_name,
                 self.profile.max_threads,
             )
             self._model = TextEmbedding(
-                model_name=self.model_name,
+                model_name=self.resolved_model_name,
                 cache_dir=cache_str,
                 threads=self.profile.max_threads,
                 cuda=False,

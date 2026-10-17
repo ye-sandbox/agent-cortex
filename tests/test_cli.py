@@ -173,7 +173,7 @@ def test_cli_models_download_invalid_profile() -> None:
 def test_cli_models_download_network_error() -> None:
     with patch(
         "cortex.cli.download_profile_models",
-        side_effect=ModelDownloadError("BAAI/bge-m3", "HF Hub unreachable"),
+        side_effect=ModelDownloadError("BAAI/bge-large-en-v1.5", "HF Hub unreachable"),
     ):
         result = runner.invoke(app, ["models", "download", "--profile", "high"])
 
@@ -189,6 +189,7 @@ def test_cli_models_list() -> None:
     assert "balanced" in result.stdout
     assert "high" in result.stdout
     assert "low" in result.stdout
+    assert "code" in result.stdout
 
 
 def test_cli_sync_no_sources(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

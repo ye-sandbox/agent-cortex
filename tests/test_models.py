@@ -141,7 +141,7 @@ def test_search_result_chunk() -> None:
 def test_predefined_hardware_profiles() -> None:
     """Verifies predefined profile attributes match architectural specifications."""
     high = PREDEFINED_PROFILES[HardwareProfileName.HIGH]
-    assert high.embedding_model == "BAAI/bge-m3"
+    assert high.embedding_model == "BAAI/bge-large-en-v1.5"
     assert high.embedding_dim == 1024
     assert high.reranker_model == "BAAI/bge-reranker-large"
     assert high.reranker_enabled is True
@@ -161,6 +161,14 @@ def test_predefined_hardware_profiles() -> None:
     assert low.reranker_enabled is False
     assert low.top_k_rerank == 0
 
+    code = PREDEFINED_PROFILES[HardwareProfileName.CODE]
+    assert code.embedding_model == "jinaai/jina-embeddings-v2-base-code"
+    assert code.embedding_dim == 768
+    assert code.reranker_model == "jinaai/jina-reranker-v1-turbo-en"
+    assert code.reranker_enabled is True
+    assert code.top_k_rerank == 25
+    assert code.max_threads == 4
+
 
 def test_resolve_hardware_profile() -> None:
     """Verifies profile resolution by name and case insensitivity."""
@@ -172,6 +180,10 @@ def test_resolve_hardware_profile() -> None:
 
     prof_low = resolve_hardware_profile(HardwareProfileName.LOW)
     assert prof_low.name == "low"
+
+    prof_code = resolve_hardware_profile("code")
+    assert prof_code.name == "code"
+    assert prof_code.embedding_dim == 768
 
 
 def test_resolve_hardware_profile_custom() -> None:

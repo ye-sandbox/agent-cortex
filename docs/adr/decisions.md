@@ -18,14 +18,15 @@ type: architectural-decision-log
 ### 2026-10-17 — ADR-001: Embedded LanceDB with FastEmbed, Hardware Profiles and 2-Stage Reranking
 
 - **Context:** Autonomous agents and developers across `ye-sandbox` need sub-second semantic discovery of architectural patterns, contracts, and past solutions without the overhead of heavy vector database daemons (Qdrant, Milvus) running continuously. Hardware varies from low-power laptops to high-core homelab servers.
-- **Decision:** Adopt **LanceDB** as an in-process embedded vector database combined with **FastEmbed** (ONNX Runtime in CPU) supporting 4 configurable profiles:
-  - `high`: `BAAI/bge-m3` (1024 dim) + `BAAI/bge-reranker-large` (maximum precision and multilingual capability).
+- **Decision:** Adopt **LanceDB** as an in-process embedded vector database combined with **FastEmbed** (ONNX Runtime in CPU) supporting 5 configurable profiles:
+  - `high`: `BAAI/bge-large-en-v1.5` (1024 dim) + `BAAI/bge-reranker-large` (aliased to `bge-reranker-v2-m3-int8`, maximum precision).
   - `balanced` (Default): `BAAI/bge-small-en-v1.5` or `multilingual-e5-small` (384 dim, ~130MB) + `BAAI/bge-reranker-base` (~30-50ms latency).
   - `low`: `bge-small-en-v1.5` (384 dim) with Cross-Encoder disabled (pure Stage 1 Hybrid retrieval, <20ms latency).
+  - `code`: `jinaai/jina-embeddings-v2-base-code` (768 dim, 8k context) + `jinaai/jina-reranker-v1-turbo-en` (specialized for source code and contracts).
   - `custom`: User-declared ONNX embedding and reranker models in `config.yaml`.
 - **Pipeline:**
   1. *Stage 1 (Hybrid Retrieval):* Dense vector search (IVF-PQ) + Sparse full-text search (Tantivy BM25) fused with RRF (Reciprocal Rank Fusion).
-  2. *Stage 2 (Reranking):* Cross-Encoder model (enabled in `high`, `balanced`, and `custom`) to eliminate false positives and provide precision ranking for top 5 candidates.
+  2. *Stage 2 (Reranking):* Cross-Encoder model (enabled in `high`, `balanced`, `code`, and `custom`) to eliminate false positives and provide precision ranking for top 5 candidates.
 - **Consequences:** Zero background RAM overhead at rest; instant cold-start (<30ms); zero GPU/PyTorch requirements; adaptive resource usage per device profile.
 
 ---
