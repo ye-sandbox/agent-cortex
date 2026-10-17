@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [01.1]: Core Data Models & Config Loader
+### 📌 Task [01.2]: Semantic Chunking & Specialized Parsers
 
-- **Description:** Implement Pydantic v2 schemas for `DocumentChunk` (with metadata contracts: `scope`, `lifecycle`, `category`, `breadcrumb`, `tags`), hardware profiles (`high`, `balanced`, `low`, `custom`), and `config.yaml` loader (`sources.repositories`, `sources.auto_discover`).
-- **Systems Involved:** `src/cortex/models`, `src/cortex/config`, `tests/`
+- **Description:** Implement domain-specific parsers and chunking logic for Markdown sections (by headers), OpenAPI (by endpoint `METHOD /path`), and Docker Compose (by service `services.<name>`) producing deterministic `DocumentChunk` records.
+- **Systems Involved:** `src/cortex/parsers`, `tests/`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,11 +18,11 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Strictly-typed Pydantic v2 model for `DocumentChunk` matching contracts in `.agent/NOTES.md` (id schema, metadata, deterministic validation).
-- [ ] Hardware profile models (`HardwareProfile`: `high`, `balanced`, `low`, `custom`) defining embedding model, dimensions, reranker, and thread settings.
-- [ ] Cortex configuration loader (`CortexConfig`) supporting `~/.config/agent-cortex/config.yaml` or local workspace override with validation.
-- [ ] Unit tests in `tests/test_models.py` and `tests/test_config.py` verifying serialization, validation errors, and profile resolution.
-- [ ] `mypy --strict`, `ruff check`, and `pytest` pass with 0 errors.
+- [ ] Markdown parser chunking documents by markdown headers (`#`, `##`, `###`) with hierarchical breadcrumbs and category `doc`.
+- [ ] OpenAPI parser chunking by endpoint operation (`METHOD /path`) with parameters, descriptions, and category `contract`.
+- [ ] Docker Compose parser chunking by service (`services.<name>`) isolating ports, volumes, non-secret env vars, and category `infra`.
+- [ ] Comprehensive unit tests verifying deterministic IDs, chunk boundaries, metadata, and breadcrumb hierarchy.
+- [ ] Strict typing with `mypy --strict`, linters, and tests passing with 0 errors.
 
 ---
 
@@ -32,12 +32,12 @@
 |---|---|---|---|
 | [00.0] | Initial scaffolding from template-agent greenfield | [`ee62579`] | 2026-10-17 |
 | [00.1] | Setup Python Skeleton, Tooling, Linters, and Core ML Packaging | [`70f90c5`] | 2026-10-17 |
+| [01.1] | Core Data Models & Config Loader | [`7d7faf0`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[01.2]** [Semantic Chunking & Specialized Parsers: Markdown sections by headers, OpenAPI by endpoint (`METHOD /path`), and Docker Compose by service (`services.<name>`)] — `[parsers]`
 - [ ] **[01.3]** [LanceDB Vector Storage & FastEmbed Engine: In-process LanceDB management in `~/.local/share/agent-cortex/data`, ONNX embedding generation, hybrid retrieval (IVF-PQ dense + Tantivy BM25 + RRF fusion)] — `[storage]`
 - [ ] **[01.4]** [Cross-Encoder Precision Reranker & Profile Controller: 2-stage reranker (`bge-reranker-base` / `large`), profile-based activation, and bypass in `low` profile] — `[reranker]`
 - [ ] **[02.1]** [Model Lifecycle & Onboarding CLI: `cortex bootstrap` (directory setup, initial config, default weights download) and `cortex models download` (explicit pre-caching with Rich progress bars)] — `[models]`
