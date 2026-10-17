@@ -151,3 +151,34 @@ def test_cleanup_orphan_repos_edge_cases() -> None:
         storage.upsert_chunks(chunks, table_name="chunks", dim=4)
         assert storage.cleanup_orphan_repos([], table_name="chunks") == 0
         assert storage.count_chunks() == 2
+
+
+def test_get_indexed_repos() -> None:
+    """Ensure get_indexed_repos returns sorted unique list of repository names."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        assert storage.get_indexed_repos("missing") == []
+
+        chunks_a = _make_dummy_chunks("repo-z", 3, dim=4)
+        chunks_b = _make_dummy_chunks("repo-a", 2, dim=4)
+        storage.upsert_chunks(chunks_a + chunks_b, table_name="chunks", dim=4)
+
+        repos = storage.get_indexed_repos("chunks")
+        assert repos == ["repo-a", "repo-z"]
+
+
+def test_cleanup_all_orphan_repos() -> None:
+    """Ensure cleanup_all_orphan_repos cleans across multiple tables."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        storage.upsert_chunks(_make_dummy_chunks("repo-keep", 3, dim=4), table_name="t1", dim=4)
+        storage.upsert_chunks(_make_dummy_chunks("repo-drop", 2, dim=4), table_name="t1", dim=4)
+
+        storage.upsert_chunks(_make_dummy_chunks("repo-keep", 4, dim=4), table_name="t2", dim=4)
+        storage.upsert_chunks(_make_dummy_chunks("repo-drop", 5, dim=4), table_name="t2", dim=4)
+
+        res = storage.cleanup_all_orphan_repos(["repo-keep"])
+        assert res["t1"] == 2
+        assert res["t2"] == 5
+        assert storage.count_chunks("t1") == 3
+        assert storage.count_chunks("t2") == 4

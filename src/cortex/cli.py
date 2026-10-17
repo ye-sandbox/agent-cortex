@@ -6,7 +6,7 @@ import json
 import tempfile
 from datetime import timedelta
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
 import typer
 from rich.console import Console
@@ -638,11 +638,99 @@ def _format_bytes(num: int | float) -> str:
     return f"{n:.1f} TiB"
 
 
+def _run_clean_orphans(
+    keep: str | None = None,
+    table: str = "all",
+    json_output: bool = False,
+    config_path: Path | None = None,
+) -> None:
+    cfg = load_config(config_path)
+    storage = StorageManager(cfg.storage.data_dir)
+
+    all_tables = storage.table_names()
+    if not all_tables:
+        if json_output:
+            typer.echo(json.dumps([]))
+            return
+        console.print("[yellow]No tables found in storage to clean.[/yellow]")
+        return
+
+    target_tables = all_tables if table.lower() == "all" else [table]
+    for t in target_tables:
+        if t not in all_tables:
+            console.print(f"[bold red]Error:[/bold red] Table '{t}' not found in storage.")
+            raise typer.Exit(code=1)
+
+    active_repos: list[str] = []
+    if keep is not None:
+        active_repos = [r.strip() for r in keep.split(",") if r.strip()]
+        if not active_repos:
+            console.print(
+                "[bold red]Error:[/bold red] "
+                "--keep was provided but no valid repository names were found."
+            )
+            raise typer.Exit(code=1)
+    else:
+        manifest_path = cfg.storage.data_dir / "manifest.json"
+        if manifest_path.exists():
+            manifest_mgr = ManifestManager(manifest_path)
+            manifest = manifest_mgr.load()
+            active_repos = list(manifest.repositories.keys())
+
+    if not active_repos:
+        if json_output:
+            typer.echo(json.dumps([]))
+            return
+        console.print(
+            "[yellow]No active repositories found in manifest and no --keep specified. "
+            "Skipping orphan cleanup.[/yellow]"
+        )
+        return
+
+    results: list[dict[str, Any]] = []
+    for t in target_tables:
+        purged = storage.cleanup_orphan_repos(active_repos, table_name=t)
+        remaining = storage.count_chunks(table_name=t)
+        results.append(
+            {
+                "table_name": t,
+                "purged_chunks": purged,
+                "remaining_chunks": remaining,
+                "retained_repos": active_repos,
+            }
+        )
+
+    if json_output:
+        typer.echo(json.dumps(results, indent=2))
+        return
+
+    table_view = Table(title="Storage Orphan Repositories Cleanup", show_header=True)
+    table_view.add_column("Table", style="bold cyan")
+    table_view.add_column("Purged Chunks", justify="right", style="bold yellow")
+    table_view.add_column("Remaining Chunks", justify="right", style="green")
+
+    for r in results:
+        table_view.add_row(
+            r["table_name"],
+            str(r["purged_chunks"]),
+            str(r["remaining_chunks"]),
+        )
+
+    console.print(table_view)
+    total_purged = sum(r["purged_chunks"] for r in results)
+    console.print(
+        f"\n[bold green]✓[/bold green] Orphan cleanup complete. "
+        f"Total purged chunks: [bold yellow]{total_purged}[/bold yellow]. "
+        f"Retained repos: [dim]{', '.join(active_repos)}[/dim]"
+    )
+
+
 def _run_compaction(
     table: str = "all",
     prune_all: bool = False,
     delete_unverified: bool = True,
     clean_orphans: bool = False,
+    keep: str | None = None,
     json_output: bool = False,
     config_path: Path | None = None,
 ) -> None:
@@ -663,12 +751,24 @@ def _run_compaction(
             console.print(f"[bold red]Error:[/bold red] Table '{t}' not found in storage.")
             raise typer.Exit(code=1)
 
-    if clean_orphans:
-        manifest_path = cfg.storage.data_dir / "manifest.json"
-        if manifest_path.exists():
-            manifest_mgr = ManifestManager(manifest_path)
-            manifest = manifest_mgr.load()
-            active_repos = list(manifest.repositories.keys())
+    if clean_orphans or keep is not None:
+        active_repos: list[str] = []
+        if keep is not None:
+            active_repos = [r.strip() for r in keep.split(",") if r.strip()]
+            if not active_repos:
+                console.print(
+                    "[bold red]Error:[/bold red] "
+                    "--keep was provided but no valid repository names were found."
+                )
+                raise typer.Exit(code=1)
+        else:
+            manifest_path = cfg.storage.data_dir / "manifest.json"
+            if manifest_path.exists():
+                manifest_mgr = ManifestManager(manifest_path)
+                manifest = manifest_mgr.load()
+                active_repos = list(manifest.repositories.keys())
+
+        if active_repos:
             for t in target_tables:
                 purged = storage.cleanup_orphan_repos(active_repos, table_name=t)
                 if not json_output and purged > 0:
@@ -757,9 +857,17 @@ def storage_compact(
         bool,
         typer.Option(
             "--clean-orphans",
-            help="Purge chunks belonging to repositories no longer tracked in manifest.json.",
+            help="Purge chunks not in manifest.json (or specified in --keep).",
         ),
     ] = False,
+    keep: Annotated[
+        str | None,
+        typer.Option(
+            "--keep",
+            "-k",
+            help="Comma-separated repository names to retain (overrides manifest.json).",
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -782,6 +890,7 @@ def storage_compact(
         prune_all=prune_all,
         delete_unverified=delete_unverified,
         clean_orphans=clean_orphans,
+        keep=keep,
         json_output=json_output,
         config_path=config_path,
     )
@@ -815,9 +924,17 @@ def app_compact(
         bool,
         typer.Option(
             "--clean-orphans",
-            help="Purge chunks belonging to repositories no longer tracked in manifest.json.",
+            help="Purge chunks not in manifest.json (or specified in --keep).",
         ),
     ] = False,
+    keep: Annotated[
+        str | None,
+        typer.Option(
+            "--keep",
+            "-k",
+            help="Comma-separated repository names to retain (overrides manifest.json).",
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -840,6 +957,93 @@ def app_compact(
         prune_all=prune_all,
         delete_unverified=delete_unverified,
         clean_orphans=clean_orphans,
+        keep=keep,
+        json_output=json_output,
+        config_path=config_path,
+    )
+
+
+@storage_app.command(name="clean-orphans")
+def storage_clean_orphans(
+    keep: Annotated[
+        str | None,
+        typer.Option(
+            "--keep",
+            "-k",
+            help="Comma-separated repository names to retain (overrides manifest.json).",
+        ),
+    ] = None,
+    table: Annotated[
+        str,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Target table to clean or 'all' for all tables.",
+        ),
+    ] = "all",
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable JSON cleanup results.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Purge vector chunks for repositories no longer tracked in manifest or specified in --keep."""
+    _run_clean_orphans(
+        keep=keep,
+        table=table,
+        json_output=json_output,
+        config_path=config_path,
+    )
+
+
+@app.command(name="clean-orphans")
+def app_clean_orphans(
+    keep: Annotated[
+        str | None,
+        typer.Option(
+            "--keep",
+            "-k",
+            help="Comma-separated repository names to retain (overrides manifest.json).",
+        ),
+    ] = None,
+    table: Annotated[
+        str,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Target table to clean or 'all' for all tables.",
+        ),
+    ] = "all",
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable JSON cleanup results.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Purge vector chunks for repositories no longer tracked in manifest or specified in --keep."""
+    _run_clean_orphans(
+        keep=keep,
+        table=table,
         json_output=json_output,
         config_path=config_path,
     )

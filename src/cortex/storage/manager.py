@@ -441,6 +441,18 @@ class StorageManager:
             results.append(res)
         return results
 
+    def get_indexed_repos(self, table_name: str = "chunks") -> list[str]:
+        """Return sorted list of unique repository names present in the target table."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        try:
+            results = tbl.search().select(["repo"]).to_list()
+            return sorted({str(r["repo"]) for r in results if "repo" in r and r["repo"]})
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to retrieve indexed repos for table '%s': %s", table_name, exc)
+            return []
+
     def cleanup_orphan_repos(
         self,
         active_repos: Sequence[str],
@@ -461,7 +473,9 @@ class StorageManager:
         tbl = self._db.open_table(table_name)
         count_before = int(tbl.count_rows())
 
-        safe_repos = [r.strip().replace("'", "''") for r in active_repos if r.strip()]
+        safe_repos = list(
+            dict.fromkeys(r.strip().replace("'", "''") for r in active_repos if r.strip())
+        )
         if not safe_repos:
             return 0
 
@@ -477,3 +491,10 @@ class StorageManager:
             safe_repos,
         )
         return deleted
+
+    def cleanup_all_orphan_repos(self, active_repos: Sequence[str]) -> dict[str, int]:
+        """Purge orphan chunks across all tables in storage database."""
+        results: dict[str, int] = {}
+        for name in self.table_names():
+            results[name] = self.cleanup_orphan_repos(active_repos, table_name=name)
+        return results

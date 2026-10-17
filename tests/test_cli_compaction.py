@@ -212,3 +212,205 @@ def test_cli_benchmark_synthetic_json(tmp_path: Path, monkeypatch: pytest.Monkey
     assert "stage1_fts" in data
     assert "stage1_hybrid" in data
     assert "end_to_end" in data
+
+
+def test_cli_clean_orphans_help() -> None:
+    """Ensure both cortex clean-orphans and storage clean-orphans provide help with --keep."""
+    res1 = runner.invoke(app, ["clean-orphans", "--help"])
+    assert res1.exit_code == 0
+    assert "--keep" in res1.stdout
+    assert "overrides manifest.json" in res1.stdout
+
+    res2 = runner.invoke(app, ["storage", "clean-orphans", "--help"])
+    assert res2.exit_code == 0
+    assert "--keep" in res2.stdout
+    assert "overrides manifest.json" in res2.stdout
+
+
+def test_cli_clean_orphans_empty(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure clean-orphans handles empty storage gracefully."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    result = runner.invoke(app, ["storage", "clean-orphans", "--config-path", str(config_file)])
+    assert result.exit_code == 0
+    assert "No tables found in storage to clean" in result.stdout
+
+    result_json = runner.invoke(
+        app, ["storage", "clean-orphans", "--json", "--config-path", str(config_file)]
+    )
+    assert result_json.exit_code == 0
+    assert json.loads(result_json.stdout) == []
+
+
+def test_cli_clean_orphans_default_manifest(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ensure clean-orphans purges chunks not in manifest by default."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    _populate_test_storage(data_dir)
+
+    manifest_mgr = ManifestManager(data_dir / "manifest.json")
+    manifest = manifest_mgr.load()
+    manifest.repositories["repo-alpha"] = RepoSyncState(
+        repo_name="repo-alpha",
+        repo_path="/tmp/repo-alpha",
+        last_synced_commit="11112222",
+        last_synced_at="2026-10-17T00:00:00",
+        chunk_count=5,
+        file_count=5,
+    )
+    manifest_mgr.save(manifest)
+
+    result = runner.invoke(
+        app,
+        ["storage", "clean-orphans", "--config-path", str(config_file)],
+    )
+    assert result.exit_code == 0
+    assert "Orphan cleanup complete" in result.stdout
+    assert "repo-alpha" in result.stdout
+
+    storage = StorageManager(data_dir=data_dir)
+    assert storage.count_chunks() == 5
+
+
+def test_cli_clean_orphans_keep_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure --keep overrides manifest.json retention list."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    _populate_test_storage(data_dir)
+
+    # Set up manifest that tracks BOTH repo-alpha and orphan-repo
+    manifest_mgr = ManifestManager(data_dir / "manifest.json")
+    manifest = manifest_mgr.load()
+    manifest.repositories["repo-alpha"] = RepoSyncState(
+        repo_name="repo-alpha",
+        repo_path="/tmp/repo-alpha",
+        last_synced_commit="11112222",
+        last_synced_at="2026-10-17T00:00:00",
+        chunk_count=5,
+        file_count=5,
+    )
+    manifest.repositories["orphan-repo"] = RepoSyncState(
+        repo_name="orphan-repo",
+        repo_path="/tmp/orphan-repo",
+        last_synced_commit="33334444",
+        last_synced_at="2026-10-17T00:00:00",
+        chunk_count=1,
+        file_count=1,
+    )
+    manifest_mgr.save(manifest)
+
+    # Now run clean-orphans specifying --keep repo-alpha
+    # Even though orphan-repo is in manifest, it MUST be purged!
+    result = runner.invoke(
+        app,
+        [
+            "storage",
+            "clean-orphans",
+            "--keep",
+            "repo-alpha",
+            "--json",
+            "--config-path",
+            str(config_file),
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert len(data) == 1
+    assert data[0]["table_name"] == "chunks"
+    assert data[0]["purged_chunks"] == 1
+    assert data[0]["remaining_chunks"] == 5
+    assert data[0]["retained_repos"] == ["repo-alpha"]
+
+    storage = StorageManager(data_dir=data_dir)
+    assert storage.count_chunks() == 5
+    assert storage.get_indexed_repos() == ["repo-alpha"]
+
+
+def test_cli_clean_orphans_keep_invalid_empty(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ensure passing empty/whitespace --keep raises an error."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    _populate_test_storage(data_dir)
+
+    result = runner.invoke(
+        app,
+        ["storage", "clean-orphans", "--keep", " ,  ", "--config-path", str(config_file)],
+    )
+    assert result.exit_code == 1
+    assert "--keep was provided but no valid repository names" in result.stdout
+
+
+def test_cli_clean_orphans_no_manifest_no_keep(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Ensure clean-orphans warns and skips deletion if no manifest and no --keep."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    _populate_test_storage(data_dir)
+
+    result = runner.invoke(
+        app,
+        ["storage", "clean-orphans", "--config-path", str(config_file)],
+    )
+    assert result.exit_code == 0
+    assert "No active repositories found in manifest and no --keep specified" in result.stdout
+
+    storage = StorageManager(data_dir=data_dir)
+    assert storage.count_chunks() == 6
+
+
+def test_cli_compact_keep_override(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ensure cortex compact --keep repo1 overrides manifest.json."""
+    config_file = tmp_path / "config.yaml"
+    data_dir = tmp_path / "data"
+    cfg = CortexConfig()
+    cfg.storage.data_dir = data_dir
+    save_config(cfg, config_file)
+    monkeypatch.setenv("AGENT_CORTEX_DATA_DIR", str(data_dir))
+
+    _populate_test_storage(data_dir)
+
+    result = runner.invoke(
+        app,
+        [
+            "compact",
+            "--clean-orphans",
+            "--keep",
+            "repo-alpha",
+            "--json",
+            "--config-path",
+            str(config_file),
+        ],
+    )
+    assert result.exit_code == 0
+    data = json.loads(result.stdout)
+    assert data[0]["chunks_count"] == 5
