@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Annotated
 
 import typer
 from rich.console import Console
+from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
@@ -16,12 +18,18 @@ from cortex.config.loader import (
     load_config,
     save_config,
 )
+from cortex.ingestion.discovery import resolve_sync_sources
+from cortex.ingestion.engine import IngestionEngine
+from cortex.ingestion.manifest import ManifestManager
+from cortex.models.chunk import ChunkCategory, ChunkScope
 from cortex.models.lifecycle import ModelDownloadError, download_profile_models
 from cortex.models.profile import (
     PREDEFINED_PROFILES,
     HardwareProfileName,
     resolve_hardware_profile,
 )
+from cortex.retrieval.pipeline import HybridRetrievalPipeline
+from cortex.storage.manager import StorageManager
 
 app = typer.Typer(
     name="cortex",
@@ -177,6 +185,368 @@ def bootstrap(
             border_style="green",
         )
     )
+
+
+@app.command()
+def sync(
+    repo: Annotated[
+        str | None,
+        typer.Option(
+            "--repo",
+            "-r",
+            help="Sync a specific repository by name or filesystem path.",
+        ),
+    ] = None,
+    all_repos: Annotated[
+        bool,
+        typer.Option(
+            "--all",
+            "-a",
+            help="Sync all configured and auto-discovered repositories.",
+        ),
+    ] = False,
+    force_full: Annotated[
+        bool,
+        typer.Option(
+            "--force-full",
+            "-f",
+            help="Force full re-indexing, bypassing incremental git diff checkpoints.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Synchronize git repositories into LanceDB vector storage incrementally."""
+    cfg = load_config(config_path)
+    sources = resolve_sync_sources(config=cfg, repo_filter=repo, all_flag=all_repos)
+
+    if not sources:
+        if repo:
+            console.print(
+                f"[bold red]Error:[/bold red] Repository '{repo}' not found "
+                "in configuration or on filesystem."
+            )
+        else:
+            console.print("[yellow]No repositories configured or discovered for sync.[/yellow]")
+            console.print(
+                "Run 'cortex sync --repo <path_or_name>' or configure repositories in config.yaml."
+            )
+        raise typer.Exit(code=1)
+
+    console.print(
+        f"[bold cyan]agent-cortex[/bold cyan] synchronizing "
+        f"[bold]{len(sources)}[/bold] repository source(s)...\n"
+    )
+
+    engine = IngestionEngine.from_config(cfg)
+    results = []
+
+    with console.status("[bold green]Indexing repositories...[/bold green]") as status_bar:
+        for src in sources:
+            repo_name = src.get_repo_name()
+            status_bar.update(f"Syncing [cyan]{repo_name}[/cyan]...")
+            res = engine.sync_repository(
+                repo_path=src.path,
+                repo_name=repo_name,
+                default_scope=src.default_scope,
+                force_full=force_full,
+            )
+            results.append(res)
+
+    table = Table(title="Repository Synchronization Summary", show_header=True)
+    table.add_column("Repository", style="bold cyan", no_wrap=True)
+    table.add_column("Commit Range", style="dim", no_wrap=True)
+    table.add_column("Added", justify="right", style="green")
+    table.add_column("Updated", justify="right", style="yellow")
+    table.add_column("Deleted", justify="right", style="red")
+    table.add_column("Files", justify="right")
+    table.add_column("Duration", justify="right", style="dim")
+    table.add_column("Status", justify="center", no_wrap=True)
+
+    has_errors = False
+    for r in results:
+        if r.errors:
+            has_errors = True
+            status_text = "[bold red]✗ Failed[/bold red]"
+        elif r.has_changes:
+            status_text = "[bold green]✓ Synced[/bold green]"
+        else:
+            status_text = "[green]✓ Clean[/green]"
+
+        base_str = r.base_commit[:8] if r.base_commit else "initial"
+        target_str = r.target_commit[:8] if r.target_commit else "?"
+        commit_range = f"{base_str}..{target_str}" if r.base_commit else target_str
+
+        table.add_row(
+            r.repo,
+            commit_range,
+            str(r.added_chunks),
+            str(r.updated_chunks),
+            str(r.deleted_chunks),
+            str(r.processed_files),
+            f"{r.duration_seconds:.2f}s",
+            status_text,
+        )
+
+    console.print(table)
+
+    if has_errors:
+        for r in results:
+            if r.errors:
+                console.print(f"\n[bold red]Errors encountered in '{r.repo}':[/bold red]")
+                for err in r.errors:
+                    console.print(f"  • {err}")
+        raise typer.Exit(code=1)
+
+    console.print("\n[bold green]✓ All repositories synchronized successfully.[/bold green]")
+
+
+@app.command()
+def search(
+    query: Annotated[
+        str,
+        typer.Argument(help="Semantic query to search across portfolio knowledge."),
+    ],
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            "-p",
+            help="Hardware profile tier override (high, balanced, low).",
+        ),
+    ] = None,
+    limit: Annotated[
+        int | None,
+        typer.Option(
+            "--limit",
+            "-l",
+            help="Maximum number of search results to return.",
+        ),
+    ] = None,
+    scope: Annotated[
+        str | None,
+        typer.Option(
+            "--scope",
+            "-s",
+            help="Scope filter (internal, public, confidential, or comma-separated).",
+        ),
+    ] = None,
+    include_archived: Annotated[
+        bool,
+        typer.Option(
+            "--include-archived",
+            help="Include archived chunks without score penalty.",
+        ),
+    ] = False,
+    category: Annotated[
+        str | None,
+        typer.Option(
+            "--category",
+            help="Filter by category (doc, contract, infra, invariant, solution).",
+        ),
+    ] = None,
+    repo: Annotated[
+        str | None,
+        typer.Option(
+            "--repo",
+            "-r",
+            help="Filter results by repository name.",
+        ),
+    ] = None,
+    rerank: Annotated[
+        bool,
+        typer.Option(
+            "--rerank/--no-rerank",
+            help="Enable or disable Stage 2 cross-encoder reranking.",
+        ),
+    ] = True,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable NDJSON output for AI agent subshell invocation.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Search portfolio documentation, OpenAPI contracts, and infrastructure definitions."""
+    cleaned_query = query.strip()
+    if not cleaned_query:
+        if json_output:
+            return
+        console.print("[yellow]Empty query provided.[/yellow]")
+        return
+
+    cfg = load_config(config_path)
+
+    # Parse scopes
+    scopes: list[ChunkScope] | None = None
+    if scope:
+        scopes = []
+        for s in scope.split(","):
+            s_clean = s.strip().lower()
+            if s_clean:
+                try:
+                    scopes.append(ChunkScope(s_clean))
+                except ValueError:
+                    console.print(f"[bold red]Error:[/bold red] Invalid scope '{s_clean}'.")
+                    raise typer.Exit(code=1) from None
+
+    # Parse category
+    cat: ChunkCategory | None = None
+    if category:
+        try:
+            cat = ChunkCategory(category.strip().lower())
+        except ValueError:
+            console.print(f"[bold red]Error:[/bold red] Invalid category '{category}'.")
+            raise typer.Exit(code=1) from None
+
+    try:
+        pipeline = HybridRetrievalPipeline.from_config(cfg, profile_override=profile)
+        results = pipeline.search(
+            query=cleaned_query,
+            limit=limit,
+            scopes=scopes,
+            include_archived=include_archived,
+            category=cat,
+            repo=repo,
+            rerank=rerank,
+        )
+    except Exception as exc:
+        console.print(f"[bold red]Search failed:[/bold red] {exc}")
+        raise typer.Exit(code=1) from None
+
+    if json_output:
+        for res in results:
+            typer.echo(res.model_dump_json())
+        return
+
+    if not results:
+        console.print("[yellow]No matching chunks found.[/yellow]")
+        return
+
+    console.print(
+        f"[bold cyan]agent-cortex[/bold cyan] found [green]{len(results)}[/green] "
+        "matching chunk(s):\n"
+    )
+
+    for rank, r in enumerate(results, start=1):
+        repo_badge = f"[bold cyan]{escape(f'[{r.repo}]')}[/bold cyan]"
+        breadcrumb_str = f" > [yellow]{escape(r.breadcrumb)}[/yellow]" if r.breadcrumb else ""
+        console.print(
+            f"[bold green]#{rank}[/bold green] {repo_badge} "
+            f"[bold]{escape(r.file_path)}[/bold]{breadcrumb_str} "
+            f"[dim](score: {r.score:.4f}, scope: {r.scope.value}, {r.category.value})[/dim]"
+        )
+        if r.snippet:
+            indented = "    " + r.snippet.replace("\n", "\n    ")
+            console.print(f"[dim]{indented}[/dim]")
+        if r.tags:
+            tag_str = " ".join(f"[blue]#{t}[/blue]" for t in r.tags[:6])
+            console.print(f"    {tag_str}")
+        console.print()
+
+
+@app.command()
+def status(
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Output machine-readable JSON status.",
+        ),
+    ] = False,
+) -> None:
+    """Display active hardware profile, storage directories, and sync status."""
+    cfg = load_config(config_path)
+    profile = cfg.get_active_profile()
+    storage = StorageManager(cfg.storage.data_dir)
+    manifest_mgr = ManifestManager(cfg.storage.data_dir / "manifest.json")
+    manifest = manifest_mgr.load()
+
+    total_chunks = storage.count_chunks()
+    table_names = storage.table_names()
+
+    if json_output:
+        payload = {
+            "profile": {
+                "name": profile.name,
+                "embedding_model": profile.embedding_model,
+                "embedding_dim": profile.embedding_dim,
+                "reranker_model": profile.reranker_model,
+                "max_threads": profile.max_threads,
+            },
+            "storage": {
+                "data_dir": str(cfg.storage.data_dir),
+                "total_chunks": total_chunks,
+                "tables": table_names,
+            },
+            "repositories": {
+                name: state.model_dump(mode="json") for name, state in manifest.repositories.items()
+            },
+        }
+        typer.echo(json.dumps(payload, indent=2))
+        return
+
+    console.print("[bold cyan]agent-cortex[/bold cyan] system status\n")
+
+    reranker_info = profile.reranker_model or "None (Stage 1 only)"
+    vitals_panel = (
+        f"[bold]Active Profile:[/bold] [cyan]{profile.name}[/cyan]\n"
+        f"[bold]Embedding Model:[/bold] {profile.embedding_model} (dim: {profile.embedding_dim})\n"
+        f"[bold]Reranker Model:[/bold] {reranker_info}\n"
+        f"[bold]Max CPU Threads:[/bold] {profile.max_threads}\n"
+        f"[bold]Storage Directory:[/bold] [dim]{cfg.storage.data_dir}[/dim]\n"
+        f"[bold]Total Indexed Chunks:[/bold] [bold green]{total_chunks}[/bold green]"
+    )
+    console.print(Panel(vitals_panel, title="System Vitals", border_style="cyan"))
+
+    console.print()
+    if not manifest.repositories:
+        console.print("[yellow]No repositories synchronized yet.[/yellow]")
+        console.print("Run 'cortex sync' to index your first repository.")
+        return
+
+    table = Table(title="Indexed Repositories", show_header=True)
+    table.add_column("Repository", style="bold cyan")
+    table.add_column("Last Synced Commit", style="dim")
+    table.add_column("Last Synced At", style="dim")
+    table.add_column("Chunks", justify="right", style="green")
+    table.add_column("Files", justify="right")
+    table.add_column("Path", style="dim")
+
+    for state in manifest.repositories.values():
+        table.add_row(
+            state.repo_name,
+            state.last_synced_commit[:8] if state.last_synced_commit else "None",
+            state.last_synced_at[:19] if state.last_synced_at else "-",
+            str(state.chunk_count),
+            str(state.file_count),
+            state.repo_path,
+        )
+
+    console.print(table)
 
 
 @models_app.command(name="download")

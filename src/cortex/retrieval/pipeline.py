@@ -6,7 +6,7 @@ import logging
 from collections.abc import Sequence
 from typing import Any
 
-from cortex.config.loader import RetrievalConfig
+from cortex.config.loader import CortexConfig, RetrievalConfig, load_config
 from cortex.embeddings.engine import EmbeddingEngine
 from cortex.models.chunk import (
     ChunkCategory,
@@ -14,6 +14,7 @@ from cortex.models.chunk import (
     ChunkScope,
     SearchResultChunk,
 )
+from cortex.models.profile import HardwareProfileName, resolve_hardware_profile
 from cortex.retrieval.reranker import RerankerEngine
 from cortex.storage.manager import StorageManager
 
@@ -68,6 +69,33 @@ class HybridRetrievalPipeline:
         self.reranker = reranker
         self.config = config or RetrievalConfig()
         self.table_name = table_name
+
+    @classmethod
+    def from_config(
+        cls,
+        config: CortexConfig | None = None,
+        profile_override: HardwareProfileName | str | None = None,
+        table_name: str = "chunks",
+    ) -> HybridRetrievalPipeline:
+        """Construct HybridRetrievalPipeline from resolved CortexConfig
+        with optional profile override.
+        """
+        cfg = config or load_config()
+        storage = StorageManager(data_dir=cfg.storage.data_dir)
+        profile = (
+            resolve_hardware_profile(profile_override, cfg.custom_profile)
+            if profile_override
+            else cfg.get_active_profile()
+        )
+        embeddings = EmbeddingEngine(profile=profile)
+        reranker = RerankerEngine(profile=profile) if profile.reranker_model else None
+        return cls(
+            storage=storage,
+            embeddings=embeddings,
+            reranker=reranker,
+            config=cfg.retrieval,
+            table_name=table_name,
+        )
 
     def search(
         self,

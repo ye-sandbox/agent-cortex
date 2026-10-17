@@ -103,3 +103,8 @@ class SyncResult(BaseModel):
     def is_success(self) -> bool:
         """Return True if sync completed without errors."""
         return len(self.errors) == 0
+
+    @property
+    def has_changes(self) -> bool:
+        """Return True if any chunks were added, updated, or deleted."""
+        return (self.added_chunks + self.updated_chunks + self.deleted_chunks) > 0
