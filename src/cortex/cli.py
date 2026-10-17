@@ -18,7 +18,7 @@ from cortex.benchmarks.latency import (
     generate_synthetic_benchmark_dataset,
     run_latency_benchmark,
 )
-from cortex.client import ClientMode, CortexClient
+from cortex.client import ClientMode, CortexClient, CortexRemoteError
 from cortex.config.loader import (
     CortexConfig,
     get_default_config_path,
@@ -482,6 +482,24 @@ def search(
             repo=repo,
             rerank=rerank,
         )
+    except CortexRemoteError as exc:
+        target_hub = (
+            exc.hub_url
+            or client.hub_url
+            or hub_url
+            or (cfg.remote.hub_url if cfg.remote else None)
+            or "unknown"
+        )
+        panel_content = (
+            f"[bold red]Remote Hub Connection Failed[/bold red]\n\n"
+            f"Target: [cyan]{escape(str(target_hub))}[/cyan]\n"
+            f"Reason: [dim]{escape(str(exc))}[/dim]\n\n"
+            f"[yellow]Diagnostic:[/yellow]\n"
+            f"• Verify that the daemon is running (`cortex serve`) or network connectivity.\n"
+            f"• Run with `--local` to query the local embedded LanceDB database directly."
+        )
+        console.print(Panel(panel_content, title="Connection Error", border_style="red"))
+        raise typer.Exit(code=1) from None
     except Exception as exc:
         console.print(f"[bold red]Search failed:[/bold red] {exc}")
         raise typer.Exit(code=1) from None

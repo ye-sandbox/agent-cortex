@@ -219,7 +219,7 @@ def test_client_remote_auth_failure() -> None:
     client.close()
 
 
-def test_client_auto_fallback_when_remote_down() -> None:
+def test_client_remote_configured_fails_fast_when_down() -> None:
     mock_pipeline = MagicMock(spec=HybridRetrievalPipeline)
     dummy_chunk = _make_dummy_chunk()
     mock_pipeline.search.return_value = [dummy_chunk]
@@ -246,28 +246,64 @@ def test_client_auto_fallback_when_remote_down() -> None:
         base_url="http://offline-hub:8000",
     )
 
-    # Health check falls back to local
-    health = client.health()
-    assert health["status"] == "ok"
-    assert health["total_chunks"] == 25
-    assert health["mode"] == "in_process"
+    # Health check fails fast
+    with pytest.raises(CortexRemoteError, match="unreachable") as exc_info:
+        client.health()
+    assert exc_info.value.hub_url == "http://offline-hub:8000"
 
-    # Search falls back to local
+    # Search fails fast without local fallback
+    with pytest.raises(CortexRemoteError, match="unreachable") as exc_info:
+        client.search("query")
+    assert exc_info.value.hub_url == "http://offline-hub:8000"
+    mock_pipeline.search.assert_not_called()
+
+    # Streaming search fails fast without local fallback
+    with pytest.raises(CortexRemoteError, match="unreachable") as exc_info:
+        list(client.search_stream("query"))
+    assert exc_info.value.hub_url == "http://offline-hub:8000"
+
+    # Contracts fails fast without local fallback
+    with pytest.raises(CortexRemoteError, match="unreachable") as exc_info:
+        client.get_repo_contracts("sample-repo")
+    assert exc_info.value.hub_url == "http://offline-hub:8000"
+    mock_storage.get_repo_contracts.assert_not_called()
+
+    # Technologies fails fast without local fallback
+    with pytest.raises(CortexRemoteError, match="unreachable") as exc_info:
+        client.list_technologies()
+    assert exc_info.value.hub_url == "http://offline-hub:8000"
+    mock_storage.get_technologies.assert_not_called()
+
+    client.close()
+
+
+def test_client_auto_mode_without_hub_url_uses_local() -> None:
+    mock_pipeline = MagicMock(spec=HybridRetrievalPipeline)
+    dummy_chunk = _make_dummy_chunk()
+    mock_pipeline.search.return_value = [dummy_chunk]
+
+    mock_storage = MagicMock(spec=StorageManager)
+    mock_storage.count_chunks.return_value = 10
+    mock_storage.get_repo_contracts.return_value = []
+    mock_storage.get_technologies.return_value = []
+
+    cfg = CortexConfig(remote=RemoteConfig(hub_url=None))
+
+    client = CortexClient(
+        mode="auto",
+        config=cfg,
+        pipeline=mock_pipeline,
+        storage=mock_storage,
+    )
+
+    # Without hub_url, auto mode safely resolves to in-process execution
+    health = client.health()
+    assert health["mode"] == "in_process"
+    assert health["total_chunks"] == 10
+
     results = client.search("query")
     assert len(results) == 1
-    assert results[0].repo == "sample-repo"
-
-    # Streaming search falls back to local
-    stream_results = list(client.search_stream("query"))
-    assert len(stream_results) == 1
-
-    # Contracts falls back to local
-    contracts = client.get_repo_contracts("sample-repo")
-    assert contracts == []
-
-    # Technologies falls back to local
-    tech = client.list_technologies()
-    assert tech.total_technologies == 0
+    mock_pipeline.search.assert_called_once()
 
     client.close()
 
@@ -292,19 +328,19 @@ def test_client_remote_mode_connection_error_raises() -> None:
     client = CortexClient(mode="remote", hub_url="http://bad-hub:8000")
     client._http_client = httpx.Client(transport=httpx.MockTransport(mock_handler))
 
-    with pytest.raises(CortexRemoteError, match="Remote health check failed"):
+    with pytest.raises(CortexRemoteError, match="is unreachable"):
         client.health()
 
-    with pytest.raises(CortexRemoteError, match="Remote search failed"):
+    with pytest.raises(CortexRemoteError, match="is unreachable"):
         client.search("test")
 
-    with pytest.raises(CortexRemoteError, match="Remote streaming search failed"):
+    with pytest.raises(CortexRemoteError, match="is unreachable"):
         list(client.search_stream("test"))
 
-    with pytest.raises(CortexRemoteError, match="Remote get_repo_contracts failed"):
+    with pytest.raises(CortexRemoteError, match="is unreachable"):
         client.get_repo_contracts("repo")
 
-    with pytest.raises(CortexRemoteError, match="Remote list_technologies failed"):
+    with pytest.raises(CortexRemoteError, match="is unreachable"):
         client.list_technologies()
 
     client.close()

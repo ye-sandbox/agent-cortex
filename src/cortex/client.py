@@ -32,9 +32,15 @@ class CortexClientError(Exception):
 class CortexRemoteError(CortexClientError):
     """Exception raised when remote cortex hub request fails."""
 
-    def __init__(self, message: str, status_code: int | None = None) -> None:
+    def __init__(
+        self,
+        message: str,
+        status_code: int | None = None,
+        hub_url: str | None = None,
+    ) -> None:
         super().__init__(message)
         self.status_code = status_code
+        self.hub_url = hub_url
 
 
 class CortexAuthError(CortexRemoteError):
@@ -132,20 +138,23 @@ class CortexClient:
                 res_json: dict[str, Any] = resp.json()
                 return res_json
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                if self.mode == "auto":
-                    logger.warning(
-                        "Remote hub unreachable at %s (%s). Falling back to local.",
-                        self.hub_url,
-                        exc,
-                    )
-                else:
-                    raise CortexRemoteError(f"Remote health check failed: {exc}") from exc
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
             except httpx.HTTPStatusError as exc:
                 status = exc.response.status_code
                 msg = f"Remote health check returned HTTP {status}: {exc.response.text}"
                 raise CortexRemoteError(
                     msg,
                     status_code=exc.response.status_code,
+                    hub_url=self.hub_url,
                 ) from exc
 
         # Local in-process fallback / direct execution
@@ -191,14 +200,16 @@ class CortexClient:
                     include_archived=include_archived,
                 )
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                if self.mode == "auto":
-                    logger.warning(
-                        "Remote hub unreachable at %s (%s). Falling back to local in-process.",
-                        self.hub_url,
-                        exc,
-                    )
-                else:
-                    raise CortexRemoteError(f"Remote search failed: {exc}") from exc
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
 
         # Local in-process search
         return self._local_search(
@@ -239,14 +250,16 @@ class CortexClient:
                 )
                 return
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                if self.mode == "auto":
-                    logger.warning(
-                        "Remote hub unreachable at %s (%s). Falling back to local in-process.",
-                        self.hub_url,
-                        exc,
-                    )
-                else:
-                    raise CortexRemoteError(f"Remote streaming search failed: {exc}") from exc
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
 
         # Local in-process streaming fallback
         results = self._local_search(
@@ -391,14 +404,16 @@ class CortexClient:
                 raw_list = resp.json()
                 return [RepoContractChunk.model_validate(item) for item in raw_list]
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                if self.mode == "auto":
-                    logger.warning(
-                        "Remote hub unreachable at %s (%s). Falling back to local.",
-                        self.hub_url,
-                        exc,
-                    )
-                else:
-                    raise CortexRemoteError(f"Remote get_repo_contracts failed: {exc}") from exc
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
 
         # Local execution
         categories: list[str]
@@ -467,14 +482,16 @@ class CortexClient:
                 resp.raise_for_status()
                 return TechSummary.model_validate(resp.json())
             except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
-                if self.mode == "auto":
-                    logger.warning(
-                        "Remote hub unreachable at %s (%s). Falling back to local.",
-                        self.hub_url,
-                        exc,
-                    )
-                else:
-                    raise CortexRemoteError(f"Remote list_technologies failed: {exc}") from exc
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
 
         # Local execution
         mgr = self._get_storage()
