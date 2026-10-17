@@ -98,10 +98,12 @@ def test_cli_compact_success(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) ->
     assert result.exit_code == 0
     assert "Compaction complete" in result.stdout
     assert "chunks" in result.stdout
+    assert "Fragments" in result.stdout
+    assert "Versions" in result.stdout
 
 
 def test_cli_compact_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ensure compact --json returns structured JSON metrics."""
+    """Ensure compact --json returns structured JSON metrics with native telemetry."""
     config_file = tmp_path / "config.yaml"
     data_dir = tmp_path / "data"
     cfg = CortexConfig()
@@ -120,6 +122,10 @@ def test_cli_compact_json(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> No
     assert data[0]["chunks_count"] == 6
     assert "bytes_before" in data[0]
     assert "bytes_after" in data[0]
+    assert "fragments_before" in data[0]
+    assert "fragments_after" in data[0]
+    assert "versions_before" in data[0]
+    assert "versions_after" in data[0]
 
 
 def test_cli_compact_clean_orphans(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

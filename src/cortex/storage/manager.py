@@ -35,6 +35,10 @@ class CompactionResult(BaseModel):
     bytes_before: int
     bytes_after: int
     bytes_freed: int = Field(default=0)
+    fragments_before: int = Field(default=0)
+    fragments_after: int = Field(default=0)
+    versions_before: int = Field(default=0)
+    versions_after: int = Field(default=0)
 
 
 def _get_table_disk_size(path: Path) -> int:
@@ -333,6 +337,50 @@ class StorageManager:
         results: list[dict[str, Any]] = builder.to_list()
         return results
 
+    @staticmethod
+    def _inspect_table_telemetry(tbl: Table) -> tuple[int, int]:
+        """Extract (fragments_count, versions_count) from native LanceDB table metadata."""
+        fragments = 0
+        try:
+            stats = tbl.stats()
+            if isinstance(stats, dict):
+                frag_stats = stats.get("fragment_stats")
+                if isinstance(frag_stats, dict):
+                    fragments = int(frag_stats.get("num_fragments", 0))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to retrieve native table stats: %s", exc)
+
+        versions_count = 0
+        try:
+            versions = tbl.list_versions()
+            versions_count = len(versions)
+            if fragments == 0 and versions:
+                latest_meta = versions[-1].get("metadata")
+                if isinstance(latest_meta, dict) and "total_fragments" in latest_meta:
+                    fragments = int(latest_meta["total_fragments"])
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to retrieve version list: %s", exc)
+
+        return fragments, versions_count
+
+    @staticmethod
+    def _get_native_table_bytes(tbl: Table) -> int:
+        """Extract total byte size reported natively by LanceDB table stats."""
+        try:
+            stats = tbl.stats()
+            if isinstance(stats, dict):
+                return int(stats.get("total_bytes", 0))
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to retrieve native table total_bytes: %s", exc)
+        return 0
+
+    def inspect_table_telemetry(self, table_name: str = "chunks") -> tuple[int, int]:
+        """Return (fragment_count, version_count) for target table using native metadata."""
+        if table_name not in self.table_names():
+            return 0, 0
+        tbl = self._db.open_table(table_name)
+        return self._inspect_table_telemetry(tbl)
+
     def compact_table(
         self,
         table_name: str = "chunks",
@@ -344,15 +392,23 @@ class StorageManager:
             msg = f"Table '{table_name}' does not exist in database at '{self.data_dir}'."
             raise ValueError(msg)
 
+        tbl = self._db.open_table(table_name)
+        fragments_before, versions_before = self._inspect_table_telemetry(tbl)
+
         table_dir = self.data_dir / f"{table_name}.lance"
         bytes_before = _get_table_disk_size(table_dir)
+        if bytes_before == 0:
+            bytes_before = self._get_native_table_bytes(tbl)
 
-        tbl = self._db.open_table(table_name)
         with warnings.catch_warnings():
             warnings.filterwarnings("ignore", message=".*removes every version except the latest.*")
             tbl.optimize(cleanup_older_than=cleanup_older_than, delete_unverified=delete_unverified)
 
+        fragments_after, versions_after = self._inspect_table_telemetry(tbl)
         bytes_after = _get_table_disk_size(table_dir)
+        if bytes_after == 0:
+            bytes_after = self._get_native_table_bytes(tbl)
+
         bytes_freed = max(0, bytes_before - bytes_after)
         chunks_count = int(tbl.count_rows())
 
@@ -362,6 +418,10 @@ class StorageManager:
             bytes_before=bytes_before,
             bytes_after=bytes_after,
             bytes_freed=bytes_freed,
+            fragments_before=fragments_before,
+            fragments_after=fragments_after,
+            versions_before=versions_before,
+            versions_after=versions_after,
         )
 
     def compact_all(

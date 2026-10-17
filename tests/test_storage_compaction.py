@@ -36,7 +36,7 @@ def _make_dummy_chunks(repo: str, count: int, dim: int = 4) -> list[DocumentChun
 
 
 def test_compact_table_success() -> None:
-    """Ensure compact_table optimizes files and returns CompactionResult."""
+    """Ensure compact_table optimizes files and returns CompactionResult with native telemetry."""
     with TemporaryDirectory() as tmpdir:
         storage = StorageManager(data_dir=tmpdir)
         chunks = _make_dummy_chunks("repo-a", 10, dim=4)
@@ -50,6 +50,25 @@ def test_compact_table_success() -> None:
         assert result.bytes_before >= 0
         assert result.bytes_after >= 0
         assert result.bytes_freed >= 0
+        assert result.fragments_before >= 1
+        assert result.fragments_after >= 1
+        assert result.versions_before >= 1
+        assert result.versions_after >= 1
+
+
+def test_inspect_table_telemetry() -> None:
+    """Ensure inspect_table_telemetry returns native fragment and version counts."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        # Nonexistent table returns (0, 0)
+        assert storage.inspect_table_telemetry("nonexistent") == (0, 0)
+
+        chunks = _make_dummy_chunks("repo-telemetry", 5, dim=4)
+        storage.upsert_chunks(chunks, table_name="telemetry_test", dim=4)
+
+        frags, versions = storage.inspect_table_telemetry("telemetry_test")
+        assert frags >= 1
+        assert versions >= 1
 
 
 def test_compact_table_nonexistent_raises() -> None:
@@ -64,15 +83,22 @@ def test_compact_table_prune_older_than() -> None:
     """Ensure compact_table accepts explicit cleanup_older_than and delete_unverified."""
     with TemporaryDirectory() as tmpdir:
         storage = StorageManager(data_dir=tmpdir)
-        chunks = _make_dummy_chunks("repo-b", 5, dim=4)
-        storage.upsert_chunks(chunks, table_name="chunks", dim=4)
+        # Create multiple versions by writing multiple batches
+        chunks_1 = _make_dummy_chunks("repo-b", 3, dim=4)
+        chunks_2 = _make_dummy_chunks("repo-c", 3, dim=4)
+        storage.upsert_chunks(chunks_1, table_name="chunks", dim=4)
+        storage.upsert_chunks(chunks_2, table_name="chunks", dim=4)
 
         result = storage.compact_table(
             table_name="chunks",
             cleanup_older_than=timedelta(days=0),
             delete_unverified=True,
         )
-        assert result.chunks_count == 5
+        assert result.chunks_count == 6
+        assert result.versions_before >= 2
+        assert result.versions_after == 1
+        assert result.fragments_before >= 1
+        assert result.fragments_after >= 1
 
 
 def test_compact_all_tables() -> None:

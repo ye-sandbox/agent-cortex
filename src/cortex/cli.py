@@ -694,15 +694,29 @@ def _run_compaction(
     table_view = Table(title="LanceDB Table Compaction Summary", show_header=True)
     table_view.add_column("Table", style="bold cyan")
     table_view.add_column("Chunks", justify="right", style="green")
+    table_view.add_column("Fragments", justify="right")
+    table_view.add_column("Versions", justify="right")
     table_view.add_column("Size Before", justify="right")
     table_view.add_column("Size After", justify="right")
     table_view.add_column("Freed", justify="right", style="bold yellow")
 
     total_freed = sum(r.bytes_freed for r in results)
     for r in results:
+        frag_str = (
+            f"{r.fragments_before} → {r.fragments_after}"
+            if r.fragments_before != r.fragments_after
+            else str(r.fragments_after)
+        )
+        ver_str = (
+            f"{r.versions_before} → {r.versions_after}"
+            if r.versions_before != r.versions_after
+            else str(r.versions_after)
+        )
         table_view.add_row(
             r.table_name,
             str(r.chunks_count),
+            frag_str,
+            ver_str,
             _format_bytes(r.bytes_before),
             _format_bytes(r.bytes_after),
             _format_bytes(r.bytes_freed),
