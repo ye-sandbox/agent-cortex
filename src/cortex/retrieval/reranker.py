@@ -136,3 +136,21 @@ class RerankerEngine:
         if top_k is not None:
             return reranked[: max(0, top_k)]
         return reranked
+
+    @classmethod
+    def download_model(
+        cls,
+        profile: HardwareProfile | HardwareProfileName | str | None = None,
+        cache_dir: Path | str | None = None,
+    ) -> Path | None:
+        """Explicitly pre-cache the ONNX reranker model weights for a profile if enabled."""
+        from cortex.models.lifecycle import download_reranker_model
+
+        resolved = (
+            profile
+            if isinstance(profile, HardwareProfile)
+            else resolve_hardware_profile(profile or HardwareProfileName.BALANCED)
+        )
+        if not resolved.reranker_enabled or not resolved.reranker_model:
+            return None
+        return download_reranker_model(resolved.reranker_model, cache_dir=cache_dir)

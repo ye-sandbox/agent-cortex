@@ -1,4 +1,4 @@
-"""Unit tests for FastEmbed embedding engine and hardware profile routing."""
+from collections.abc import Sequence
 
 from cortex.embeddings.engine import EmbeddingEngine
 from cortex.models.chunk import (
@@ -46,7 +46,7 @@ def test_embedding_engine_lazy_loading() -> None:
 def test_embedding_engine_with_mock_functions() -> None:
     """Test embedding execution with hermetic mock functions to avoid network downloads."""
 
-    def mock_passage_embed(texts: list[str]) -> list[list[float]]:
+    def mock_passage_embed(texts: Sequence[str]) -> list[list[float]]:
         return [[float(len(t)), 0.5, 0.25] for t in texts]
 
     def mock_query_embed(query: str) -> list[float]:

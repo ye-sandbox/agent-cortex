@@ -120,3 +120,19 @@ class EmbeddingEngine:
         embeddings_iter = model.query_embed(query)
         first_emb = next(iter(embeddings_iter))
         return [float(v) for v in first_emb]
+
+    @classmethod
+    def download_model(
+        cls,
+        profile: HardwareProfile | HardwareProfileName | str | None = None,
+        cache_dir: Path | str | None = None,
+    ) -> Path:
+        """Explicitly pre-cache the ONNX embedding model weights for a profile."""
+        from cortex.models.lifecycle import download_embedding_model
+
+        resolved = (
+            profile
+            if isinstance(profile, HardwareProfile)
+            else resolve_hardware_profile(profile or HardwareProfileName.BALANCED)
+        )
+        return download_embedding_model(resolved.embedding_model, cache_dir=cache_dir)
