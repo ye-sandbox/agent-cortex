@@ -2,6 +2,7 @@
 
 from tempfile import TemporaryDirectory
 
+from cortex.benchmarks.ingestion import run_sync_throughput_benchmark
 from cortex.benchmarks.latency import (
     calculate_latency_stats,
     generate_synthetic_benchmark_dataset,
@@ -99,3 +100,22 @@ def test_run_latency_benchmark_isolated() -> None:
         assert report.stage1_hybrid.iterations == 4
         assert report.end_to_end.iterations == 4
         assert report.stage2_rerank is None  # low profile has no reranker
+
+
+def test_run_sync_throughput_benchmark() -> None:
+    """Ensure run_sync_throughput_benchmark measures per-batch vs deferred indexing."""
+    report = run_sync_throughput_benchmark(
+        num_repos=3,
+        chunks_per_repo=10,
+        batch_size=5,
+        dim=4,
+    )
+
+    assert report.total_chunks == 30
+    assert report.batch_size == 5
+    assert report.batch_count == 6
+    assert report.per_batch_duration_ms > 0.0
+    assert report.deferred_duration_ms > 0.0
+    assert report.per_batch_throughput_chunks_per_sec > 0.0
+    assert report.deferred_throughput_chunks_per_sec > 0.0
+    assert report.speedup_factor > 0.0

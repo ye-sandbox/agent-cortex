@@ -8,7 +8,7 @@ import warnings
 from collections.abc import Sequence
 from datetime import timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import lancedb
 from lancedb.db import DBConnection
@@ -156,12 +156,59 @@ class StorageManager:
         )
 
         if create_fts:
-            try:
-                tbl.create_index("content", config=FTS(), replace=True)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("FTS index creation deferred or failed: %s", exc)
+            self.create_fts_index(table_name=table_name, replace=True)
 
         return len(chunks)
+
+    def create_fts_index(
+        self,
+        table_name: str = "chunks",
+        field_name: str = "content",
+        replace: bool = True,
+    ) -> bool:
+        """Create or rebuild full-text search (Tantivy) index on the target table."""
+        if table_name not in self.table_names():
+            return False
+        tbl = self._db.open_table(table_name)
+        try:
+            tbl.create_index(field_name, config=FTS(), replace=replace)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "FTS index creation on '%s.%s' deferred or failed: %s",
+                table_name,
+                field_name,
+                exc,
+            )
+            return False
+
+    def create_vector_index(
+        self,
+        table_name: str = "chunks",
+        column: str = "vector",
+        metric: Literal["l2", "cosine", "dot", "hamming"] = "cosine",
+        min_rows: int = 256,
+        replace: bool = True,
+    ) -> bool:
+        """Create IVF-PQ vector index on target table if row count meets minimum threshold."""
+        if table_name not in self.table_names():
+            return False
+        tbl = self._db.open_table(table_name)
+        try:
+            row_count = int(tbl.count_rows())
+            if row_count < min_rows:
+                logger.debug(
+                    "Skipping vector index on '%s': row count (%d) is below threshold (%d)",
+                    table_name,
+                    row_count,
+                    min_rows,
+                )
+                return False
+            tbl.create_index(metric=metric, vector_column_name=column, replace=replace)
+            return True
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Vector index creation on '%s.%s' failed: %s", table_name, column, exc)
+            return False
 
     def delete_by_id(self, chunk_id: str, table_name: str = "chunks") -> None:
         """Delete single chunk by deterministic ID."""

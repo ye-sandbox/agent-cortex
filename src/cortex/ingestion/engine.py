@@ -57,6 +57,7 @@ class IngestionEngine:
         default_scope: ChunkScope = ChunkScope.INTERNAL,
         force_full: bool = False,
         table_name: str = "chunks",
+        defer_fts: bool = False,
     ) -> SyncResult:
         """Perform incremental or full drift sync of a git repository into LanceDB."""
         start_time = time.perf_counter()
@@ -184,16 +185,25 @@ class IngestionEngine:
         # 5. Batch embed and upsert into LanceDB
         if chunks_to_upsert:
             try:
-                embedded_chunks = self.embedding.embed_chunks(chunks_to_upsert)
-                self.storage.upsert_chunks(
-                    embedded_chunks,
-                    table_name=table_name,
-                    dim=len(embedded_chunks[0].vector or []),
-                )
+                for i in range(0, len(chunks_to_upsert), self.batch_size):
+                    batch = chunks_to_upsert[i : i + self.batch_size]
+                    embedded_batch = self.embedding.embed_chunks(batch)
+                    dim = len(embedded_batch[0].vector or []) if embedded_batch else 384
+                    self.storage.upsert_chunks(
+                        embedded_batch,
+                        table_name=table_name,
+                        dim=dim,
+                        create_fts=False,
+                    )
             except Exception as exc:
                 msg = f"Failed to embed and upsert chunks for repo '{name}': {exc}"
                 logger.exception(msg)
                 errors.append(msg)
+
+        # Defer FTS index rebuild until sync cycle completion
+        total_changed = added_count + updated_count + deleted_count
+        if not defer_fts and total_changed > 0:
+            self.storage.create_fts_index(table_name=table_name)
 
         # 6. Update state manifest
         safe_name = name.replace("'", "''")
@@ -229,9 +239,14 @@ class IngestionEngine:
         sources: Sequence[RepositorySourceConfig],
         force_full: bool = False,
         table_name: str = "chunks",
+        defer_fts: bool = True,
     ) -> list[SyncResult]:
-        """Sync all configured repository sources incrementally."""
+        """Sync all configured repository sources incrementally.
+
+        Defers FTS index creation until all sources finish when defer_fts is True.
+        """
         results: list[SyncResult] = []
+        any_changes = False
         for src in sources:
             if not src.enabled:
                 logger.info("Skipping disabled repository '%s'", src.get_repo_name())
@@ -242,6 +257,13 @@ class IngestionEngine:
                 default_scope=src.default_scope,
                 force_full=force_full,
                 table_name=table_name,
+                defer_fts=defer_fts,
             )
             results.append(res)
+            if res.added_chunks > 0 or res.updated_chunks > 0 or res.deleted_chunks > 0:
+                any_changes = True
+
+        if defer_fts and any_changes:
+            self.storage.create_fts_index(table_name=table_name)
+
         return results

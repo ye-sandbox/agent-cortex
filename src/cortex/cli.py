@@ -262,6 +262,8 @@ def sync(
     results = []
 
     with console.status("[bold green]Indexing repositories...[/bold green]") as status_bar:
+        defer_fts = len(sources) > 1
+        any_changes = False
         for src in sources:
             repo_name = src.get_repo_name()
             status_bar.update(f"Syncing [cyan]{repo_name}[/cyan]...")
@@ -270,8 +272,15 @@ def sync(
                 repo_name=repo_name,
                 default_scope=src.default_scope,
                 force_full=force_full,
+                defer_fts=defer_fts,
             )
             results.append(res)
+            if res.added_chunks > 0 or res.updated_chunks > 0 or res.deleted_chunks > 0:
+                any_changes = True
+
+        if defer_fts and any_changes:
+            status_bar.update("Building full-text search index...")
+            engine.storage.create_fts_index()
 
     table = Table(title="Repository Synchronization Summary", show_header=True)
     table.add_column("Repository", style="bold cyan", no_wrap=True)

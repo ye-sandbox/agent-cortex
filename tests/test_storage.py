@@ -186,3 +186,41 @@ def test_storage_manager_delete_by_file() -> None:
         assert storage.count_chunks() == 1
         remaining = storage.vector_search([0.1, 0.1], limit=5)
         assert remaining[0]["id"] == "repo1:doc2.md:c0"
+
+
+def test_storage_manager_fts_and_vector_indexing() -> None:
+    """Test explicit create_fts_index and create_vector_index methods."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        # Nonexistent table returns False
+        assert not storage.create_fts_index("nonexistent")
+        assert not storage.create_vector_index("nonexistent")
+
+        # Upsert with create_fts=False
+        words = ["apple", "banana", "cherry", "durian", "elderberry"]
+        chunks = [
+            DocumentChunk(
+                id=f"repo:doc.md:c{i}",
+                repo="repo",
+                file_path="doc.md",
+                category=ChunkCategory.DOC,
+                commit_sha="abc",
+                content=f"indexing payload keyword {words[i]}",
+                vector=[0.1 * i, 0.2 * i],
+            )
+            for i in range(5)
+        ]
+        storage.upsert_chunks(chunks, dim=2, create_fts=False)
+        assert storage.count_chunks() == 5
+
+        # Create FTS index explicitly
+        created = storage.create_fts_index()
+        assert created is True
+
+        hits = storage.fts_search("durian")
+        assert len(hits) == 1
+        assert hits[0]["id"] == "repo:doc.md:c3"
+
+        # Vector index threshold (5 rows < 256 default)
+        skipped = storage.create_vector_index()
+        assert skipped is False

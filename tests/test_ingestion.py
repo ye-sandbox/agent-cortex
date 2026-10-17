@@ -391,3 +391,94 @@ def test_ingestion_engine_from_config(tmp_path: Path) -> None:
     engine = IngestionEngine.from_config(config)
     assert engine.storage.data_dir == (tmp_path / "custom_data").resolve()
     assert engine.manifest.manifest_path == (tmp_path / "custom_data" / "manifest.json").resolve()
+
+
+def test_batch_ingestion_with_deferred_fts(tmp_path: Path) -> None:
+    """Test that batch ingestion defers FTS index rebuild until sync completion."""
+    storage_dir = tmp_path / "data"
+    storage = StorageManager(storage_dir)
+    manifest = ManifestManager(storage_dir / "manifest.json")
+    embedding = EmbeddingEngine(passage_embed_fn=mock_passage_embed)
+
+    # Use batch_size = 2 to force multiple batches
+    engine = IngestionEngine(
+        storage_manager=storage,
+        embedding_engine=embedding,
+        manifest_manager=manifest,
+        batch_size=2,
+    )
+
+    repo_dir = tmp_path / "multi-batch-repo"
+    init_mock_git_repo(repo_dir)
+
+    # Create 5 files yielding at least 5 chunks
+    for i in range(5):
+        (repo_dir / f"service_{i}.md").write_text(
+            f"# Service {i}\nArchitecture payload details for module_{i}.",
+            encoding="utf-8",
+        )
+    git_commit(repo_dir, "Commit 5 files")
+
+    # Sync with defer_fts=False -> should process in batches of 2, then build FTS once at end
+    res = engine.sync_repository(repo_dir, repo_name="multi-batch-repo", defer_fts=False)
+    assert res.is_success
+    assert res.added_chunks >= 5
+    assert storage.count_chunks() == res.added_chunks
+
+    # Verify FTS search finds chunks across different batches
+    hits_0 = storage.fts_search("module_0")
+    assert len(hits_0) >= 1
+    assert "service_0.md" in hits_0[0]["file_path"]
+
+    hits_4 = storage.fts_search("module_4")
+    assert len(hits_4) >= 1
+    assert "service_4.md" in hits_4[0]["file_path"]
+
+
+def test_sync_all_deferred_fts(tmp_path: Path) -> None:
+    """Test sync_all with defer_fts=True builds FTS index once after all repos complete."""
+    storage_dir = tmp_path / "data"
+    storage = StorageManager(storage_dir)
+    manifest = ManifestManager(storage_dir / "manifest.json")
+    embedding = EmbeddingEngine(passage_embed_fn=mock_passage_embed)
+
+    engine = IngestionEngine(
+        storage_manager=storage,
+        embedding_engine=embedding,
+        manifest_manager=manifest,
+        batch_size=2,
+    )
+
+    repo_1 = tmp_path / "repo-alpha"
+    init_mock_git_repo(repo_1)
+    (repo_1 / "README.md").write_text(
+        "# Alpha Project\nHigh performance clustering.",
+        encoding="utf-8",
+    )
+    git_commit(repo_1, "Init alpha")
+
+    repo_2 = tmp_path / "repo-beta"
+    init_mock_git_repo(repo_2)
+    (repo_2 / "README.md").write_text(
+        "# Beta Project\nDistributed storage consensus.",
+        encoding="utf-8",
+    )
+    git_commit(repo_2, "Init beta")
+
+    sources = [
+        RepositorySourceConfig(path=repo_1, name="repo-alpha", enabled=True),
+        RepositorySourceConfig(path=repo_2, name="repo-beta", enabled=True),
+    ]
+
+    results = engine.sync_all(sources, defer_fts=True)
+    assert len(results) == 2
+    assert all(r.is_success for r in results)
+
+    # Both repositories should be indexed and searchable via FTS
+    hits_alpha = storage.fts_search("clustering")
+    assert len(hits_alpha) >= 1
+    assert hits_alpha[0]["repo"] == "repo-alpha"
+
+    hits_beta = storage.fts_search("consensus")
+    assert len(hits_beta) >= 1
+    assert hits_beta[0]["repo"] == "repo-beta"
