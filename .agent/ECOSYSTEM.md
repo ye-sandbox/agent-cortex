@@ -27,12 +27,15 @@
 - **MCP Server Contract (`cortex-mcp` via stdio):**
   - Consumed by: Antigravity, Maestri Desktop, Cursor, Claude Code, and autonomous Planner agents.
   - Tools exposed:
-    - `cortex_search(query: str, category?: str, repo?: str, limit?: int)`: Hybrid semantic search returning code & doc snippets with `file://` references.
-    - `cortex_get_repo_contracts(repo: str)`: Returns high-level API routes, IPC sockets, and schemas exposed/consumed by a repository.
-    - `cortex_list_technologies(tech_name: str)`: Finds which repositories utilize a given technology (e.g. `VictoriaLogs`, `FastAPI`, `LanceDB`).
+    - `cortex_search(query: str, category?: str, repo?: str, scope?: str, limit?: int)`: Hybrid semantic search returning code & doc snippets with `file://` references.
+    - `cortex_get_repo_contracts(repo: str)`: Returns high-level API routes (OpenAPI endpoints), Docker Compose services, and schemas for a repository.
+    - `cortex_list_technologies(tech_name: str)`: Finds which repositories utilize a given technology (e.g. `VictoriaLogs`, `FastAPI`, `LanceDB`, `Redis`).
 - **CLI Contract (`cortex`):**
-  - Commands: `cortex search`, `cortex sync`, `cortex status`.
+  - Commands: `cortex bootstrap`, `cortex models download`, `cortex search`, `cortex sync`, `cortex status`.
   - Flag Invariant: `--json` MUST output strictly valid NDJSON/JSON for programmatic ingestion by agent subshells.
+- **Dual-Mode Transport Contract:**
+  - Local mode: Embedded LanceDB + in-process FastEmbed ONNX.
+  - Remote mode: FastAPI / Starlette streaming JSON/NDJSON secured with `Authorization: Bearer <CORTEX_API_KEY>`.
 - **Data Storage Boundary (Privacy Invariant):**
   - Production vector storage path defaults to `~/.local/share/agent-cortex/data/` or `$AGENT_CORTEX_DATA_DIR`.
   - It MUST NEVER be placed within the tracked git directory of this public repository.

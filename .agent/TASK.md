@@ -7,9 +7,9 @@
 
 ## Active Task
 
-### 📌 Task [00.1]: Setup Python Skeleton, UV Tooling, Linters, and Test Runner
+### 📌 Task [00.1]: Setup Python 3.14+ Skeleton, Tooling, Linters, and Core ML Packaging
 
-- **Description:** Initialize `pyproject.toml` with `uv`, configure strict typing (`mypy`), linting/formatting (`ruff`), and testing framework (`pytest`). Establish standard directory layout (`src/cortex/`, `tests/`) and basic smoke test.
+- **Description:** Configure `pyproject.toml` with Python >= 3.14, promote `lancedb` and `fastembed` into primary dependencies, configure strict typing (`mypy --strict`), linting/formatting (`ruff`), and testing framework (`pytest`). Establish standard directory layout (`src/cortex/`, `tests/`) and baseline smoke test.
 - **Systems Involved:** `tooling`, `ci`, `src/cortex`
 - **Action Type:**
   - [ ] Read-only / Documentation
@@ -18,10 +18,10 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] `pyproject.toml` configured with Python >= 3.12, `uv` packaging, and core dependencies.
-- [ ] `ruff` and `mypy --strict` configured and passing with exit code 0.
-- [ ] `pytest` configured and passing with a baseline smoke test in `tests/`.
-- [ ] Clean directory structure in `src/cortex/` with entrypoints for CLI and MCP.
+- [ ] `pyproject.toml` configured with Python >= 3.14, `uv` packaging, and core dependencies (`lancedb`, `fastembed`, `pydantic`, `typer`, `rich`, `pyyaml`, `mcp`).
+- [ ] `ruff` and `mypy --strict` configured for Python 3.14 and passing with exit code 0.
+- [ ] `pytest` configured and passing with baseline smoke tests in `tests/`.
+- [ ] Clean package structure in `src/cortex/` with entrypoints for CLI (`cortex`) and MCP (`cortex-mcp`).
 
 ---
 
@@ -35,11 +35,13 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[01.1]** [Core Data Models & Config Loader: Pydantic v2 schemas for DocumentChunk, Metadata, and YAML config] — `[core]`
-- [ ] **[01.2]** [Semantic Chunking & Parsers: Markdown sections, OpenAPI endpoints, Docker Compose services] — `[parsers]`
-- [ ] **[01.3]** [LanceDB Vector Storage & FastEmbed: Hybrid retrieval (IVF-PQ dense + Tantivy BM25)] — `[storage]`
-- [ ] **[01.4]** [Cross-Encoder Reranker: 2-stage precision reranking via FastEmbed] — `[reranker]`
-- [ ] **[02.1]** [Incremental Git Drift Ingestion: Track commits via git diff and perform selective upsert] — `[ingestion]`
-- [ ] **[02.2]** [CLI Interface: `cortex search`, `cortex sync`, `cortex status` with rich terminal & JSON output] — `[cli]`
-- [ ] **[03.1]** [MCP Server: stdio server exposing `cortex_search` and `cortex_get_repo_contracts`] — `[mcp]`
-- [ ] **[03.2]** [Dual-Mode Architecture: Remote HTTP client and Homelab Hub integration] — `[remote]`
+- [ ] **[01.1]** [Core Data Models & Config Loader: Pydantic v2 schemas for `DocumentChunk` (with `scope`, `lifecycle`, `category`), hardware profiles (`high`, `balanced`, `low`, `custom`), and `config.yaml` loader (`sources.repositories`, `sources.auto_discover`)] — `[core]`
+- [ ] **[01.2]** [Semantic Chunking & Specialized Parsers: Markdown sections by headers, OpenAPI by endpoint (`METHOD /path`), and Docker Compose by service (`services.<name>`)] — `[parsers]`
+- [ ] **[01.3]** [LanceDB Vector Storage & FastEmbed Engine: In-process LanceDB management in `~/.local/share/agent-cortex/data`, ONNX embedding generation, hybrid retrieval (IVF-PQ dense + Tantivy BM25 + RRF fusion)] — `[storage]`
+- [ ] **[01.4]** [Cross-Encoder Precision Reranker & Profile Controller: 2-stage reranker (`bge-reranker-base` / `large`), profile-based activation, and bypass in `low` profile] — `[reranker]`
+- [ ] **[02.1]** [Model Lifecycle & Onboarding CLI: `cortex bootstrap` (directory setup, initial config, default weights download) and `cortex models download` (explicit pre-caching with Rich progress bars)] — `[models]`
+- [ ] **[02.2]** [Incremental Git Drift Ingestion: Track portfolio commits via `git diff --name-status`, handle renames/deletes, and selective upsert into LanceDB] — `[ingestion]`
+- [ ] **[02.3]** [CLI Interface: `cortex search`, `cortex sync`, `cortex status` with Rich terminal formatting and `--json` NDJSON output for agent subshells] — `[cli]`
+- [ ] **[03.1]** [MCP Server: stdio server exposing `cortex_search` (with `scope` filter), `cortex_get_repo_contracts`, and `cortex_list_technologies`] — `[mcp]`
+- [ ] **[03.2]** [Dual-Mode Architecture & Homelab Hub: Lightweight FastAPI/Starlette daemon with streaming JSON/NDJSON and Bearer Token (`CORTEX_API_KEY`) authentication] — `[remote]`
+- [ ] **[90.1]** [Storage Compaction & Portfolio Benchmarks: LanceDB compaction, index cleanup, latency benchmarks under multi-repo portfolios] — `[perf]`

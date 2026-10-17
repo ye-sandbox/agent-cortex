@@ -11,25 +11,42 @@
 
 Every indexed chunk is uniquely identifiable and deterministic across re-indexing runs:
 
-- **ID Schema:** `{repo}:{file_path}:{chunk_index_or_hash}` (e.g. `ia-maestri:.agent/ECOSYSTEM.md:c2`)
+- **ID Schema:** `{repo}:{file_path}:{chunk_index_or_hash}` (e.g. `ia-maestri:.agent/ECOSYSTEM.md:c2`, `sentinel:specs/openapi.json:get_deals`)
 - **Metadata Contract:**
-  - `repo`: repository name (e.g. `poc-mod-maestri`)
+  - `repo`: repository name (e.g. `sentinel-deals-backend`, `clipflow-backend`)
   - `file_path`: relative file path in target repo
   - `category`: one of `["doc", "contract", "infra", "invariant", "solution"]`
   - `lifecycle`: one of `["active", "archived", "deprecated"]`
-  - `breadcrumb`: heading hierarchy (e.g. `ia-maestri > ECOSYSTEM.md > 3. Interfaces`)
+  - `scope`: one of `["internal", "public", "confidential"]` (default: `"internal"`)
+  - `breadcrumb`: heading/structural hierarchy (e.g. `sentinel > specs/openapi.json > GET /deals` or `clipflow > compose.yaml > services > worker`)
   - `commit_sha`: git commit hash when indexed
-  - `tags`: extracted keywords / tech identifiers (e.g. `["websocket", "retry", "lancedb"]`)
+  - `tags`: extracted keywords / tech identifiers (e.g. `["websocket", "retry", "lancedb", "GET", "/deals"]`)
 
-### 2. Hybrid Retrieval & Scoring Formula
+### 2. Contract Parsing Invariants
+
+- **OpenAPI (`openapi.json` / `openapi.yaml`):**
+  - Chunked by **individual operation (`METHOD /path`)**.
+  - Content includes summary, description, tags, parameters (path/query/header), and primary 200/201 response schemas.
+  - Category: `"contract"`.
+- **Docker Compose (`compose.yaml` / `docker-compose.yml`):**
+  - Chunked by **individual service (`services.<name>`)**.
+  - Content includes image/build target, non-secret env vars, volume mounts, port mappings, healthcheck, and `depends_on`.
+  - Category: `"infra"`.
+
+### 3. Retrieval Profiles & Scoring Formula
 
 The search pipeline combines dense vector embeddings with sparse BM25 scores via Reciprocal Rank Fusion (RRF):
 
 $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 
 - Default constants: $k = 60$, $w_{dense} = 0.65$, $w_{sparse} = 0.35$.
-- **Lifecycle penalty:** If `lifecycle == "archived"`, the candidate score is multiplied by `0.6` unless explicitly queried with `--include-archived`.
-- **Reranker Step:** Top 30 candidates from RRF are passed through a Cross-Encoder (`BAAI/bge-reranker-large` or `base`) to produce the final top $K$ results.
+- **Lifecycle penalty:** If `lifecycle == "archived"`, candidate score is multiplied by `0.6` unless explicitly queried with `--include-archived`.
+- **Scope filtering:** Queries default to allowed scopes (`internal` and `public`). Confidential chunks require explicit `--scope confidential` or privileged credentials.
+- **Hardware Profiles Matrix:**
+  - `high`: `BAAI/bge-m3` (1024 dim) + `BAAI/bge-reranker-large` (top 30 -> top K)
+  - `balanced` (Default): `BAAI/bge-small-en-v1.5` or `multilingual-e5-small` (384 dim) + `BAAI/bge-reranker-base` (top 20 -> top K)
+  - `low`: `bge-small-en-v1.5` (384 dim), Reranker disabled (pure Stage 1 RRF, < 20ms)
+  - `custom`: Declared in `config.yaml`
 
 ---
 
@@ -38,6 +55,7 @@ $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 - **FastEmbed ONNX CPU Threads:** On multi-core CPUs, limit ONNX thread contention when invoked from within agent subshells (`OMP_NUM_THREADS=4`).
 - **File URI Portability:** Always normalize file paths into standard `file://` URLs that work across both Linux native and WSL2/Windows environments.
 - **Git Diff Renames:** Detect `R` (Rename) in `git diff --name-status` to avoid orphan records; delete the old path and upsert the new path.
+- **Model Download Pre-flight:** Always prompt or rely on `cortex bootstrap` / `cortex models download` to cache weights; avoid unannounced multi-gigabyte downloads during CLI searches.
 
 ---
 

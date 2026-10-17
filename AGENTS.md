@@ -81,11 +81,11 @@ Format: `[Epic].[Sequence]` with two-digit epics. Subtasks: `[XX.Y.Z]`. Exactly 
 
 ## Stack & Runtime
 
-- **Language & Runtime:** Python 3.12+ (strictly typed)
+- **Language & Runtime:** Python 3.14+ (strictly typed)
 - **Package & Environment Manager:** `uv`
 - **Embedded Vector Database:** `lancedb` (Apache Arrow / Parquet storage)
-- **Local Embedding Engine:** `fastembed` (ONNX Runtime in CPU, default: `BAAI/bge-m3` or `bge-small-en-v1.5`)
-- **Reranker Engine:** `fastembed` Cross-Encoder (default: `BAAI/bge-reranker-large` / `bge-reranker-base`)
+- **Local Embedding Engine:** `fastembed` (ONNX Runtime in CPU, profiles: `high`, `balanced` [default], `low`, `custom`)
+- **Reranker Engine:** `fastembed` Cross-Encoder (default: `BAAI/bge-reranker-base` in `balanced`, `large` in `high`)
 - **CLI Framework:** `typer` + `rich` (ANSI human format & machine-readable `--json` / NDJSON)
 - **MCP Server:** Official `mcp` Python SDK (stdio transport)
 - **Data Validation:** `pydantic` v2

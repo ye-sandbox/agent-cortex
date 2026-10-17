@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/ye-sandbox/agent-cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/ye-sandbox/agent-cortex/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.14+](https://img.shields.io/badge/python-3.14+-blue.svg)](https://www.python.org/downloads/)
 [![Architecture: In--Process LanceDB](https://img.shields.io/badge/Storage-LanceDB%20Embedded-green.svg)](https://lancedb.github.io/lancedb/)
 
 🌐 **English | [Português](README.pt-br.md)**
@@ -37,14 +37,14 @@ In growing software ecosystems with autonomous agents (Antigravity, Cursor, Clau
 ┌────────────────────────────────────────────────────────────────────────┐
 │                        AGENT-CORTEX INGESTION ENGINE                   │
 │  - Semantic chunking (Markdown headers, OpenAPI routes, Compose svcs)  │
-│  - Metadata extraction (repo, breadcrumbs, tags, lifecycle status)     │
-│  - Local CPU FastEmbed (BGE-M3 / ONNX Runtime, zero PyTorch/GPU)       │
+│  - Metadata extraction (repo, breadcrumbs, tags, lifecycle, scope)     │
+│  - Local CPU FastEmbed (Adaptive profiles: high | balanced | low)      │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     ▼
 ┌────────────────────────────────────────────────────────────────────────┐
 │                      HYBRID RETRIEVAL & RERANKING                      │
 │  Stage 1: LanceDB Embedded (Dense IVF-PQ + Tantivy BM25 + RRF Fusion)   │
-│  Stage 2: Cross-Encoder Reranker (BGE-Reranker for precision top-K)    │
+│  Stage 2: Cross-Encoder Reranker (Top-K precision in balanced/high)    │
 │  Storage: Apache Arrow / Parquet in local filesystem (Zero RAM idle)   │
 └───────────────────────────────────┬────────────────────────────────────┘
                                     │
@@ -61,15 +61,15 @@ In growing software ecosystems with autonomous agents (Antigravity, Cursor, Clau
 1. **In-Process & Zero Daemon:** Built on embedded LanceDB and FastEmbed ONNX. Consumes zero RAM when idle and cold-starts in < 30ms.
 2. **Two-Stage Precision Retrieval:** Combines Dense Vector + BM25 Lexical search via Reciprocal Rank Fusion (RRF), followed by a Cross-Encoder Reranker to eliminate false positives.
 3. **Public Engine / Private Data Isolation:** The engine is open-source and public; all generated embeddings and portfolio code chunks are stored outside the Git tree in user-local directories (`~/.local/share/agent-cortex/`).
-4. **Dual-Mode Operation:** Operates locally on individual workstations or connects remotely to a central homelab hub.
+4. **Dual-Mode Operation:** Operates locally on individual workstations (embedded) or connects remotely to a central homelab hub via HTTP/REST + Bearer Token.
 
 ---
 
 ## 🚀 Quickstart
 
 ### Prerequisites
-- Python 3.12+
-- [`uv`](https://github.com/astral-sh/uv) (recommended) or `pip`
+- Python 3.14+
+- [`uv`](https://github.com/astral-sh/uv)
 
 ### Installation
 ```bash
@@ -78,13 +78,22 @@ cd agent-cortex
 uv sync
 ```
 
+### Bootstrap & Pre-caching Models
+```bash
+# Initialize config and download default profile weights (balanced)
+uv run cortex bootstrap
+
+# Pre-cache weights for high-precision profile ahead of time
+uv run cortex models download --profile high
+```
+
 ### Indexing Repositories
 ```bash
-# Scan and index a local portfolio directory
+# Scan and index a local portfolio directory (auto-discover git repos)
 uv run cortex sync ~/github/ye-sandbox/
 
 # Or index a single repository
-uv run cortex sync ~/github/ye-sandbox/poc-mod-maestri
+uv run cortex sync ~/github/ye-sandbox/sentinel-deals-backend
 ```
 
 ### Searching the Portfolio
@@ -92,8 +101,8 @@ uv run cortex sync ~/github/ye-sandbox/poc-mod-maestri
 # Natural language semantic search
 uv run cortex search "reconexão automática websocket backoff"
 
-# Filter by category or repository
-uv run cortex search "victorialogs integration" --category infra --limit 3
+# Filter by category, scope, or repository
+uv run cortex search "deals pagination endpoint" --category contract --limit 3
 
 # Machine-readable JSON output for agent subshells
 uv run cortex search "SSE streaming retry" --json
@@ -118,8 +127,8 @@ Add to your agent's MCP configuration (`antigravity.json`, `claude_desktop_confi
 ```
 
 ### Available MCP Tools:
-- **`cortex_search(query, category?, repo?, limit?)`**: Executes hybrid search and returns snippets with `file://` links.
-- **`cortex_get_repo_contracts(repo)`**: Retrieves declared APIs, sockets, and interfaces for a specific repository.
+- **`cortex_search(query, category?, repo?, scope?, limit?)`**: Executes hybrid search and returns snippets with `file://` links.
+- **`cortex_get_repo_contracts(repo)`**: Retrieves declared APIs (OpenAPI endpoints), services (Docker Compose), and interfaces for a repository.
 - **`cortex_list_technologies(tech_name)`**: Identifies all repositories using a specified framework or tool.
 
 ---
@@ -130,20 +139,27 @@ Add to your agent's MCP configuration (`antigravity.json`, `claude_desktop_confi
 storage:
   mode: "local"                             # "local" | "remote"
   path: "~/.local/share/agent-cortex/data"
+  remote:
+    endpoint: "http://homelab-mini.local:8000"
+    api_key_env: "CORTEX_API_KEY"
+
+sources:
+  auto_discover:
+    - "~/github/ye-sandbox"
+  repositories:
+    - "~/github/ye-sandbox/sentinel-deals-backend"
+    - "~/github/ye-sandbox/clipflow-backend"
 
 models:
-  profile: "high-precision"                 # "fast" | "balanced" | "high-precision"
-  embedding:
-    model: "BAAI/bge-m3"
-  reranker:
-    enabled: true
-    model: "BAAI/bge-reranker-large"
-    top_k_retrieve: 30
-    top_k_return: 5
+  profile: "balanced"                       # "high" | "balanced" | "low" | "custom"
+  custom:
+    embedding: "BAAI/bge-small-en-v1.5"
+    reranker: "BAAI/bge-reranker-base"
 
 indexing:
-  include_archived: true
+  include_archived: false
   archived_score_multiplier: 0.6
+  default_scope: "internal"
 ```
 
 ---
