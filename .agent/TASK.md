@@ -7,7 +7,10 @@
 
 ## Active Task
 
-*(No active task. Release `v0.1.0` published. Awaiting new epics for v0.2.0 cycle.)*
+- **Task ID:** `[01.2]`
+- **Title:** Retrieval & Reranking evaluation benchmark suite
+- **Status:** `PLANNING`
+- **Driver:** Build automated retrieval/reranking benchmark evaluation harness (MTEB / synthetic / real repo query sets).
 
 ---
 
@@ -17,7 +20,7 @@
 
 | Task | Title | Commit(s) | Date |
 |---|---|---|---|
-| — | — | — | — |
+| [01.1] | Hardware Profiles Matrix & FastEmbed Model Alignment | `fa2f27e` | 2026-10-17 |
 
 ---
 
