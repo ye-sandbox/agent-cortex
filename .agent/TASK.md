@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [03.1]: MCP Server (`cortex_search`, `cortex_get_repo_contracts`, `cortex_list_technologies`)
+### 📌 Task [03.2]: Dual-Mode Architecture & Homelab Hub
 
-- **Description:** Implement Model Context Protocol (MCP) stdio server using the official MCP Python SDK (`mcp`), exposing core tool contracts for autonomous AI agents: `cortex_search` (with query, limit, scope, category, repo, and rerank parameters), `cortex_get_repo_contracts` (retrieving OpenAPI, compose, and architectural invariant chunks for a repository), and `cortex_list_technologies` (discovering tech tags across indexed repositories).
-- **Systems Involved:** `src/cortex/mcp_server.py`, `src/cortex/cli.py`, `tests/`
+- **Description:** Implement lightweight daemon server and client for remote portfolio querying. Provides streaming JSON/NDJSON endpoints, Bearer Token authentication (`CORTEX_API_KEY`), and seamless fallback between local in-process mode and remote hub mode.
+- **Systems Involved:** `src/cortex/server.py`, `src/cortex/client.py`, `src/cortex/cli.py`, `tests/`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,12 +18,11 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Official MCP Python SDK server implementation with stdio transport.
-- [ ] Tool `cortex_search`: semantic hybrid retrieval with compact agent anchors and metadata.
-- [ ] Tool `cortex_get_repo_contracts`: targeted inspection of OpenAPI and Docker Compose definitions for a given repo.
-- [ ] Tool `cortex_list_technologies`: aggregate tags/tech stack across portfolio repositories.
-- [ ] CLI subcommand `cortex mcp` to launch stdio server.
-- [ ] Comprehensive hermetic tests for MCP protocol tools.
+- [ ] Lightweight HTTP daemon with `/search`, `/contracts`, `/technologies`, and `/health` endpoints.
+- [ ] Support Bearer token authentication via `CORTEX_API_KEY`.
+- [ ] Dual-mode client interface with transparent fallback between local and remote.
+- [ ] CLI subcommand `cortex serve` to launch daemon.
+- [ ] Comprehensive hermetic tests with mock HTTP client/server.
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -41,10 +40,11 @@
 | [02.1] | Model Lifecycle & Onboarding CLI (`bootstrap` and `models download`) | [`24f3bcc`] | 2026-10-17 |
 | [02.2] | Incremental Git Drift Ingestion | [`04957ec`] | 2026-10-17 |
 | [02.3] | CLI Interface (`cortex search`, `cortex sync`, `cortex status`) | [`01ca41a`] | 2026-10-17 |
+| [03.1] | MCP Server (`cortex_search`, `cortex_get_repo_contracts`, `cortex_list_technologies`) | [`5b5b71d`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[03.2]** [Dual-Mode Architecture & Homelab Hub: Lightweight FastAPI/Starlette daemon with streaming JSON/NDJSON and Bearer Token (`CORTEX_API_KEY`) authentication] — `[remote]`
 - [ ] **[90.1]** [Storage Compaction & Portfolio Benchmarks: LanceDB compaction, index cleanup, latency benchmarks under multi-repo portfolios] — `[perf]`
+
