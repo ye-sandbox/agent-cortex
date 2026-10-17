@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [90.4]: Explicit Repository Cleanup in Storage Orphans
+### 📌 Task [90.5]: Dynamic Configuration & Remote Multi-Tenant Hub
 
-- **Description:** Support `--keep repo1,repo2` in `cortex storage clean-orphans` as an override to `manifest.json`.
-- **Systems Involved:** `src/cortex/cli.py`, `src/cortex/storage/manager.py`, `tests/test_cli_compaction.py`
+- **Description:** Replace static file config with DB-backed runtime configuration tables.
+- **Systems Involved:** `src/cortex/config/`, `src/cortex/server/`, `src/cortex/client.py`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,9 +18,9 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Add `--keep` option to `cortex storage clean-orphans` CLI command accepting comma-separated repository names.
-- [ ] When `--keep` is provided, use specified repositories as the active retention set overriding `manifest.json`.
-- [ ] Hermetic tests covering `--keep` flag and default manifest behavior.
+- [ ] Implement DB-backed runtime configuration tables for dynamic configuration.
+- [ ] Provide multi-tenant configuration resolution in remote hub server.
+- [ ] Hermetic tests covering dynamic config migration and multi-tenant resolution.
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -44,12 +44,12 @@
 | [03.3] | Remote Fail-Fast & Terminal Connection Diagnostics | [`2a815c4`] | 2026-10-17 |
 | [90.2] | Batch Ingestion FTS Indexing Optimization | [`73244dc`] | 2026-10-17 |
 | [90.3] | Native LanceDB Page/Fragment Compaction Telemetry | [`4a8a1d3`] | 2026-10-17 |
+| [90.4] | Explicit Repository Cleanup in Storage Orphans | [`1ddbe65`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[90.5]** [Config & Multi-Tenancy] Dynamic Configuration & Remote Multi-Tenant Hub: Replace static file config with DB-backed runtime configuration tables.
 - [ ] **[99.1]** [Release Tagging & GitHub Release: semver tagging, changelog generation, and distribution packaging] — `[rel]`
 
 
