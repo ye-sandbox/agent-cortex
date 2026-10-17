@@ -64,11 +64,25 @@ type: architectural-decision-log
 
 ---
 
-### 2026-10-17 — ADR-005: Python 3.14+ Baseline and Direct Core ML Packaging
+### 2026-10-17 — ADR-005: Python >=3.12 Baseline (Tested through 3.14+) and Direct Core ML Packaging
 
-- **Context:** The host development environment standardizes on CPython 3.14. Core ML dependencies (`lancedb 0.40.0`, `fastembed 0.9.0`, `onnxruntime 1.31.0`, `pyarrow 26.0.0`) have verified wheel resolution on Python 3.14. Separating ML libraries into optional extras (`[ml]`) created unnecessary onboarding friction for a local-first semantic engine.
+- **Context:** The host development environment and homelab nodes range from CPython 3.12 to 3.14. Core ML dependencies (`lancedb 0.40.0`, `fastembed 0.9.0`, `onnxruntime 1.31.0`, `pyarrow 26.0.0`) have verified wheel resolution across this range. Separating ML libraries into optional extras (`[ml]`) created unnecessary onboarding friction for a local-first semantic engine.
 - **Decision:**
-  - Set baseline Python version to `requires-python = ">=3.14"`.
-  - Configure `ruff` and `mypy --strict` targeting Python 3.14.
+  - Set baseline Python version to `requires-python = ">=3.12"`, supporting execution on Python 3.12, 3.13, and 3.14+.
+  - Configure `ruff` and `mypy --strict` targeting Python 3.12 syntax baseline.
   - Move `lancedb` and `fastembed` directly into primary `[project.dependencies]`.
-- **Consequences:** Out-of-the-box functionality with simple `uv sync`; modern Python 3.14 syntax and interpreter performance improvements.
+- **Consequences:** Out-of-the-box functionality with simple `uv sync` on standard workstations and homelab servers; modern syntax and strict type safety preserved.
+
+---
+
+### 2026-10-17 — ADR-006: Ecosystem Hygiene, Git Topologies, and Token-Dense Formatting
+
+- **Context:** Large-scale ingestion across dozens of portfolio repositories introduces edge cases: duplicate indexation from git worktrees and submodules; false repository exclusions caused by task archive files (`ARCHIVE.md`); token exhaustion when feeding verbose search snippets to AI agents; and language variances across projects.
+- **Decision:**
+  - *Language Invariant:* Default embedding model for `balanced` profile is strictly English-first (`BAAI/bge-small-en-v1.5`), in line with organization-wide technical standards. Document alternative multilingual models (`multilingual-e5-small`) in configuration for external non-English projects.
+  - *Contract & Architecture Focus:* Restrict MVP ingestion to architectural artifacts (Markdown, OpenAPI endpoints, Docker Compose services, system invariants). Omit raw AST code chunking to avoid semantic dilution and index bloat.
+  - *Git Topology Deduplication:* Canonicalize git roots using `git rev-parse --git-common-dir` to automatically bypass secondary git worktrees. Ignore nested `.git` submodules during parent repository scans.
+  - *Repository Lifecycle Isolation:* Clearly separate task history from repository status. The presence of `ARCHIVE.md` (historical release tasks) MUST NOT mark a repository as archived. Only explicit `.cortexignore` or GitHub `isArchived` flags an entire repository.
+  - *Token-Dense Snippets for Agents:* Format search results for LLMs using compact Markdown anchors (`[repo] path > breadcrumb`) + clean snippet, keeping verbose metadata in JSON payload attributes rather than polluting agent prompt context.
+  - *Single Bearer Token:* Remote homelab daemon authenticates via simple `Authorization: Bearer <CORTEX_API_KEY>`.
+- **Consequences:** Zero phantom duplicate vectors; high signal-to-noise ratio in agent LLM contexts; simple and predictable repository discovery.

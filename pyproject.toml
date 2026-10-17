@@ -14,13 +14,11 @@ dependencies = [
     "rich>=13.7.0",
     "pyyaml>=6.0.1",
     "mcp>=1.0.0",
-]
-
-[project.optional-dependencies]
-ml = [
     "lancedb>=0.6.0",
     "fastembed>=0.2.6",
 ]
+
+[dependency-groups]
 dev = [
     "pytest>=8.0.0",
     "ruff>=0.4.0",
@@ -35,6 +33,9 @@ cortex-mcp = "cortex.mcp_server:main"
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cortex"]
 
 [tool.ruff]
 target-version = "py312"

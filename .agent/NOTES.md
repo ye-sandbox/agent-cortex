@@ -55,6 +55,9 @@ $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 - **FastEmbed ONNX CPU Threads:** On multi-core CPUs, limit ONNX thread contention when invoked from within agent subshells (`OMP_NUM_THREADS=4`).
 - **File URI Portability:** Always normalize file paths into standard `file://` URLs that work across both Linux native and WSL2/Windows environments.
 - **Git Diff Renames:** Detect `R` (Rename) in `git diff --name-status` to avoid orphan records; delete the old path and upsert the new path.
+- **Git Worktrees & Submodules:** Bypass secondary worktrees via `git rev-parse --git-common-dir` and ignore submodules during parent repository indexing to prevent duplicate vectors.
+- **Archived Tasks vs. Archived Repos:** `ARCHIVE.md` files store valuable historic releases and active foundations; they MUST NOT trigger repo-level exclusion. Only explicit repository deprecation (`.cortexignore` or GitHub `isArchived`) flags an entire repo as archived.
+- **Token Efficiency Invariant:** MCP and CLI search outputs presented to LLMs use compact markdown anchors (`[repo] path > breadcrumb`) and omit verbose metadata (commit SHA, UUIDs) to preserve context tokens.
 - **Model Download Pre-flight:** Always prompt or rely on `cortex bootstrap` / `cortex models download` to cache weights; avoid unannounced multi-gigabyte downloads during CLI searches.
 
 ---
