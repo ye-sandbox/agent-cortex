@@ -64,14 +64,14 @@ type: architectural-decision-log
 
 ---
 
-### 2026-10-17 — ADR-005: Python >=3.12 Baseline (Tested through 3.14+) and Direct Core ML Packaging
+### 2026-10-17 — ADR-005: Python 3.14+ Baseline and Direct Core ML Packaging
 
-- **Context:** The host development environment and homelab nodes range from CPython 3.12 to 3.14. Core ML dependencies (`lancedb 0.40.0`, `fastembed 0.9.0`, `onnxruntime 1.31.0`, `pyarrow 26.0.0`) have verified wheel resolution across this range. Separating ML libraries into optional extras (`[ml]`) created unnecessary onboarding friction for a local-first semantic engine.
+- **Context:** The host development environment and homelab nodes standardize on CPython 3.14 (`/usr/bin/python3.14`). Core ML dependencies (`lancedb 0.40.0`, `fastembed 0.9.0`, `onnxruntime 1.31.0`, `pyarrow 26.0.0`) have verified wheel resolution on Python 3.14. Separating ML libraries into optional extras (`[ml]`) created unnecessary onboarding friction for a local-first semantic engine.
 - **Decision:**
-  - Set baseline Python version to `requires-python = ">=3.12"`, supporting execution on Python 3.12, 3.13, and 3.14+.
-  - Configure `ruff` and `mypy --strict` targeting Python 3.12 syntax baseline.
+  - Set baseline Python version to `requires-python = ">=3.14"`.
+  - Configure `ruff` and `mypy --strict` targeting Python 3.14.
   - Move `lancedb` and `fastembed` directly into primary `[project.dependencies]`.
-- **Consequences:** Out-of-the-box functionality with simple `uv sync` on standard workstations and homelab servers; modern syntax and strict type safety preserved.
+- **Consequences:** Out-of-the-box functionality with simple `uv sync` on Python 3.14+; full access to modern Python 3.14 interpreter speedups, syntax improvements, and strict type safety.
 
 ---
 

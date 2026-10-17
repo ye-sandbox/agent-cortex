@@ -3,7 +3,7 @@ name = "agent-cortex"
 version = "0.1.0"
 description = "Cross-repository semantic memory and portfolio knowledge engine for autonomous agents and developers"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 license = { text = "MIT" }
 authors = [
     { name = "yegear", email = "yegear@users.noreply.github.com" }
@@ -41,14 +41,14 @@ build-backend = "hatchling.build"
 packages = ["src/cortex"]
 
 [tool.ruff]
-target-version = "py312"
+target-version = "py314"
 line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "W", "UP", "B", "SIM"]
 
 [tool.mypy]
-python_version = "3.12"
+python_version = "3.14"
 strict = true
 warn_unused_configs = true
 

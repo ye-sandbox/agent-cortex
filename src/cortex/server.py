@@ -153,7 +153,7 @@ def create_app(
         if limit_val is not None:
             try:
                 limit = int(limit_val)
-            except (ValueError, TypeError):
+            except ValueError, TypeError:
                 limit = None
 
         # Scopes
