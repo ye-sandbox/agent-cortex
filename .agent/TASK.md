@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [90.2]: Batch Ingestion FTS Indexing Optimization
+### 📌 Task [90.3]: Native LanceDB Page/Fragment Compaction Telemetry
 
-- **Description:** Defer `create_index` (FTS / vector indexing) to sync completion during bulk repository upserts to eliminate redundant per-batch index rebuild I/O.
-- **Systems Involved:** `src/cortex/ingestion/engine.py`, `src/cortex/storage/manager.py`, `tests/test_ingestion.py`
+- **Description:** Replace filesystem directory size calculation with native LanceDB fragment/version telemetry once exposed in storage compaction operations.
+- **Systems Involved:** `src/cortex/storage/manager.py`, `tests/test_storage_compaction.py`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,9 +18,9 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Defer LanceDB full-text search index creation until all batches in sync cycle complete.
-- [ ] Benchmark and verify sync throughput improvements during bulk repository additions.
-- [ ] Hermetic tests verifying FTS search functionality remains intact post-batch sync.
+- [ ] Inspect LanceDB table fragment metadata and versions during `compact_table`.
+- [ ] Return detailed fragment and version counts in `CompactionResult`.
+- [ ] Hermetic tests covering compaction telemetry.
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -42,12 +42,12 @@
 | [03.2] | Dual-Mode Architecture & Homelab Hub | [`7901eeb`] | 2026-10-17 |
 | [90.1] | Storage Compaction & Portfolio Benchmarks | [`da1413d`] | 2026-10-17 |
 | [03.3] | Remote Fail-Fast & Terminal Connection Diagnostics | [`2a815c4`] | 2026-10-17 |
+| [90.2] | Batch Ingestion FTS Indexing Optimization | [`73244dc`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[90.3]** [Storage] Native LanceDB Page/Fragment Compaction Telemetry: Replace filesystem directory size calculation with native engine telemetry once exposed.
 - [ ] **[90.4]** [CLI] Explicit Repository Cleanup in Storage Orphans: Support `--keep repo1,repo2` in `cortex storage clean-orphans` as override to manifest.json.
 - [ ] **[90.5]** [Config & Multi-Tenancy] Dynamic Configuration & Remote Multi-Tenant Hub: Replace static file config with DB-backed runtime configuration tables.
 - [ ] **[99.1]** [Release Tagging & GitHub Release: semver tagging, changelog generation, and distribution packaging] — `[rel]`
