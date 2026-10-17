@@ -7,20 +7,20 @@
 
 ## Active Task
 
-### 📌 Task [90.1]: Storage Compaction & Portfolio Benchmarks
+### 📌 Task [99.1]: Release Tagging & GitHub Release
 
-- **Description:** Implement LanceDB storage compaction (`optimize`/`compact`), orphan index cleanup, and performance benchmarking under large multi-repo portfolios.
-- **Systems Involved:** `src/cortex/storage/manager.py`, `src/cortex/cli.py`, `tests/`
+- **Description:** Implement semver release tagging, CHANGELOG generation, and distribution packaging for agent-cortex.
+- **Systems Involved:** `pyproject.toml`, `CHANGELOG.md`, `README.md`, GitHub release workflows
 - **Action Type:**
-  - [ ] Read-only / Documentation
+  - [x] Read-only / Documentation
   - [x] Source code changes
 - **Status:** READY FOR PLANNING
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Implement table compaction and old fragment cleanup in `StorageManager`.
-- [ ] Add CLI subcommand `cortex compact` (or `cortex storage compact`).
-- [ ] Latency benchmarking script / suite measuring Stage 1 & 2 query times.
+- [ ] Version validation and bumping mechanism across pyproject.toml and __init__.py.
+- [ ] Comprehensive CHANGELOG.md documenting epics 00.x through 90.x.
+- [ ] GitHub release notes and packaging verification.
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -40,10 +40,12 @@
 | [02.3] | CLI Interface (`cortex search`, `cortex sync`, `cortex status`) | [`01ca41a`] | 2026-10-17 |
 | [03.1] | MCP Server (`cortex_search`, `cortex_get_repo_contracts`, `cortex_list_technologies`) | [`5b5b71d`] | 2026-10-17 |
 | [03.2] | Dual-Mode Architecture & Homelab Hub | [`7901eeb`] | 2026-10-17 |
+| [90.1] | Storage Compaction & Portfolio Benchmarks | [`da1413d`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[99.1]** [Release Tagging & GitHub Release: semver tagging, changelog generation, and distribution packaging] — `[rel]`
+*All planned release epics complete. Backlog cleared.*
+
 
