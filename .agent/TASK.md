@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [90.5]: Dynamic Configuration & Remote Multi-Tenant Hub
+### 📌 Task [99.1]: Release Tagging & GitHub Release
 
-- **Description:** Replace static file config with DB-backed runtime configuration tables.
-- **Systems Involved:** `src/cortex/config/`, `src/cortex/server/`, `src/cortex/client.py`
+- **Description:** Version tagging (SemVer), CHANGELOG.md generation, and distribution packaging.
+- **Systems Involved:** `pyproject.toml`, `CHANGELOG.md`, `src/cortex/`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,9 +18,9 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Implement DB-backed runtime configuration tables for dynamic configuration.
-- [ ] Provide multi-tenant configuration resolution in remote hub server.
-- [ ] Hermetic tests covering dynamic config migration and multi-tenant resolution.
+- [ ] Bump version to 0.1.0 in `pyproject.toml` and `src/cortex/__init__.py`.
+- [ ] Author comprehensive `CHANGELOG.md` documenting initial release and all completed epics.
+- [ ] Validate distribution build hermetically (`uv build`).
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -45,11 +45,12 @@
 | [90.2] | Batch Ingestion FTS Indexing Optimization | [`73244dc`] | 2026-10-17 |
 | [90.3] | Native LanceDB Page/Fragment Compaction Telemetry | [`4a8a1d3`] | 2026-10-17 |
 | [90.4] | Explicit Repository Cleanup in Storage Orphans | [`1ddbe65`] | 2026-10-17 |
+| [90.5] | Dynamic Configuration & Remote Multi-Tenant Hub | [`4569438`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[99.1]** [Release Tagging & GitHub Release: semver tagging, changelog generation, and distribution packaging] — `[rel]`
+*(All planned roadmap epics completed — awaiting release [99.1])*
 
 
