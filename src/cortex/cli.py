@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import tempfile
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
@@ -12,6 +14,10 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
+from cortex.benchmarks.latency import (
+    generate_synthetic_benchmark_dataset,
+    run_latency_benchmark,
+)
 from cortex.client import ClientMode, CortexClient
 from cortex.config.loader import (
     CortexConfig,
@@ -30,7 +36,7 @@ from cortex.models.profile import (
     resolve_hardware_profile,
 )
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
-from cortex.storage.manager import StorageManager
+from cortex.storage.manager import CompactionResult, StorageManager
 
 app = typer.Typer(
     name="cortex",
@@ -43,6 +49,13 @@ models_app = typer.Typer(
     no_args_is_help=True,
 )
 app.add_typer(models_app, name="models")
+
+storage_app = typer.Typer(
+    name="storage",
+    help="Manage LanceDB storage tables, compaction, and disk hygiene.",
+    no_args_is_help=True,
+)
+app.add_typer(storage_app, name="storage")
 
 console = Console()
 
@@ -586,6 +599,384 @@ def status(
         )
 
     console.print(table)
+
+
+def _format_bytes(num: int | float) -> str:
+    """Format bytes into human-readable string (B, KiB, MiB, GiB, TiB)."""
+    n = float(num)
+    for unit in ("B", "KiB", "MiB", "GiB"):
+        if abs(n) < 1024.0:
+            return f"{n:3.1f} {unit}"
+        n /= 1024.0
+    return f"{n:.1f} TiB"
+
+
+def _run_compaction(
+    table: str = "all",
+    prune_all: bool = False,
+    delete_unverified: bool = True,
+    clean_orphans: bool = False,
+    json_output: bool = False,
+    config_path: Path | None = None,
+) -> None:
+    cfg = load_config(config_path)
+    storage = StorageManager(cfg.storage.data_dir)
+
+    all_tables = storage.table_names()
+    if not all_tables:
+        if json_output:
+            typer.echo(json.dumps([]))
+            return
+        console.print("[yellow]No tables found in storage to compact.[/yellow]")
+        return
+
+    target_tables = all_tables if table.lower() == "all" else [table]
+    for t in target_tables:
+        if t not in all_tables:
+            console.print(f"[bold red]Error:[/bold red] Table '{t}' not found in storage.")
+            raise typer.Exit(code=1)
+
+    if clean_orphans:
+        manifest_path = cfg.storage.data_dir / "manifest.json"
+        if manifest_path.exists():
+            manifest_mgr = ManifestManager(manifest_path)
+            manifest = manifest_mgr.load()
+            active_repos = list(manifest.repositories.keys())
+            for t in target_tables:
+                purged = storage.cleanup_orphan_repos(active_repos, table_name=t)
+                if not json_output and purged > 0:
+                    console.print(
+                        f"[yellow]Purged {purged} orphan chunk(s) from table '{t}'.[/yellow]"
+                    )
+
+    cleanup_delta = timedelta(days=0) if prune_all else None
+    results: list[CompactionResult] = []
+
+    for t in target_tables:
+        res = storage.compact_table(
+            table_name=t,
+            cleanup_older_than=cleanup_delta,
+            delete_unverified=delete_unverified,
+        )
+        results.append(res)
+
+    if json_output:
+        typer.echo(json.dumps([r.model_dump(mode="json") for r in results], indent=2))
+        return
+
+    table_view = Table(title="LanceDB Table Compaction Summary", show_header=True)
+    table_view.add_column("Table", style="bold cyan")
+    table_view.add_column("Chunks", justify="right", style="green")
+    table_view.add_column("Size Before", justify="right")
+    table_view.add_column("Size After", justify="right")
+    table_view.add_column("Freed", justify="right", style="bold yellow")
+
+    total_freed = sum(r.bytes_freed for r in results)
+    for r in results:
+        table_view.add_row(
+            r.table_name,
+            str(r.chunks_count),
+            _format_bytes(r.bytes_before),
+            _format_bytes(r.bytes_after),
+            _format_bytes(r.bytes_freed),
+        )
+
+    console.print(table_view)
+    console.print(
+        f"\n[bold green]✓[/bold green] Compaction complete. "
+        f"Total disk space freed: [bold cyan]{_format_bytes(total_freed)}[/bold cyan]."
+    )
+
+
+@storage_app.command(name="compact")
+def storage_compact(
+    table: Annotated[
+        str,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Target table to compact or 'all' for all tables.",
+        ),
+    ] = "all",
+    prune_all: Annotated[
+        bool,
+        typer.Option(
+            "--prune-all",
+            help="Remove all older table fragments and versions (cleanup_older_than=0).",
+        ),
+    ] = False,
+    delete_unverified: Annotated[
+        bool,
+        typer.Option(
+            "--delete-unverified/--no-delete-unverified",
+            help="Purge unreferenced transaction files leftover from interrupted writes.",
+        ),
+    ] = True,
+    clean_orphans: Annotated[
+        bool,
+        typer.Option(
+            "--clean-orphans",
+            help="Purge chunks belonging to repositories no longer tracked in manifest.json.",
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable JSON compaction results.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Optimize, compact, and prune old fragments in LanceDB vector tables."""
+    _run_compaction(
+        table=table,
+        prune_all=prune_all,
+        delete_unverified=delete_unverified,
+        clean_orphans=clean_orphans,
+        json_output=json_output,
+        config_path=config_path,
+    )
+
+
+@app.command(name="compact")
+def app_compact(
+    table: Annotated[
+        str,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Target table to compact or 'all' for all tables.",
+        ),
+    ] = "all",
+    prune_all: Annotated[
+        bool,
+        typer.Option(
+            "--prune-all",
+            help="Remove all older table fragments and versions (cleanup_older_than=0).",
+        ),
+    ] = False,
+    delete_unverified: Annotated[
+        bool,
+        typer.Option(
+            "--delete-unverified/--no-delete-unverified",
+            help="Purge unreferenced transaction files leftover from interrupted writes.",
+        ),
+    ] = True,
+    clean_orphans: Annotated[
+        bool,
+        typer.Option(
+            "--clean-orphans",
+            help="Purge chunks belonging to repositories no longer tracked in manifest.json.",
+        ),
+    ] = False,
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable JSON compaction results.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Optimize, compact, and prune old fragments in LanceDB vector tables."""
+    _run_compaction(
+        table=table,
+        prune_all=prune_all,
+        delete_unverified=delete_unverified,
+        clean_orphans=clean_orphans,
+        json_output=json_output,
+        config_path=config_path,
+    )
+
+
+@app.command(name="benchmark")
+@app.command(name="bench", hidden=True)
+def benchmark(
+    iterations: Annotated[
+        int,
+        typer.Option(
+            "--iterations",
+            "-n",
+            help="Number of query benchmark iterations.",
+        ),
+    ] = 5,
+    synthetic: Annotated[
+        bool,
+        typer.Option(
+            "--synthetic/--no-synthetic",
+            help="Benchmark against an isolated synthetic multi-repo portfolio.",
+        ),
+    ] = False,
+    synthetic_repos: Annotated[
+        int,
+        typer.Option(
+            "--synthetic-repos",
+            help="Number of synthetic repositories to generate.",
+        ),
+    ] = 3,
+    synthetic_chunks: Annotated[
+        int,
+        typer.Option(
+            "--synthetic-chunks",
+            help="Number of chunks per synthetic repository.",
+        ),
+    ] = 20,
+    profile: Annotated[
+        str | None,
+        typer.Option(
+            "--profile",
+            "-p",
+            help="Hardware profile tier override (high, balanced, low).",
+        ),
+    ] = None,
+    rerank: Annotated[
+        bool,
+        typer.Option(
+            "--rerank/--no-rerank",
+            help="Include Stage 2 cross-encoder reranking.",
+        ),
+    ] = True,
+    table: Annotated[
+        str,
+        typer.Option(
+            "--table",
+            "-t",
+            help="Target table name to benchmark against.",
+        ),
+    ] = "chunks",
+    json_output: Annotated[
+        bool,
+        typer.Option(
+            "--json",
+            help="Stream machine-readable JSON benchmark report.",
+        ),
+    ] = False,
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Benchmark Stage 1 and Stage 2 retrieval latencies across portfolio knowledge."""
+    cfg = load_config(config_path)
+    prof_name = profile or cfg.profile.value
+
+    if synthetic:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_path = Path(tmpdir)
+            temp_cfg = cfg.model_copy(
+                update={
+                    "profile": HardwareProfileName(prof_name),
+                    "storage": cfg.storage.model_copy(update={"data_dir": temp_path}),
+                }
+            )
+            pipeline = HybridRetrievalPipeline.from_config(
+                temp_cfg, profile_override=prof_name, table_name=table
+            )
+            if not json_output:
+                console.print(
+                    f"[dim]Generating {synthetic_repos * synthetic_chunks} synthetic chunks "
+                    f"across {synthetic_repos} repos...[/dim]"
+                )
+            chunks = generate_synthetic_benchmark_dataset(
+                num_repos=synthetic_repos,
+                chunks_per_repo=synthetic_chunks,
+                dim=pipeline.embeddings.profile.embedding_dim,
+                embedding_engine=pipeline.embeddings,
+            )
+            pipeline.storage.upsert_chunks(
+                chunks, table_name=table, dim=pipeline.embeddings.profile.embedding_dim
+            )
+            report = run_latency_benchmark(
+                pipeline=pipeline,
+                iterations=iterations,
+                rerank=rerank,
+            )
+    else:
+        pipeline = HybridRetrievalPipeline.from_config(
+            cfg, profile_override=prof_name, table_name=table
+        )
+        total_chunks = pipeline.storage.count_chunks(table_name=table)
+        if total_chunks == 0:
+            if json_output:
+                typer.echo(
+                    json.dumps(
+                        {"error": "Database is empty. Run with --synthetic or run 'cortex sync'."}
+                    )
+                )
+            else:
+                console.print(
+                    "[yellow]Database table is empty.[/yellow] "
+                    "Run with [bold cyan]--synthetic[/bold cyan] to benchmark with synthetic data "
+                    "or run [bold cyan]'cortex sync'[/bold cyan] first."
+                )
+            raise typer.Exit(code=1)
+
+        report = run_latency_benchmark(
+            pipeline=pipeline,
+            iterations=iterations,
+            rerank=rerank,
+        )
+
+    if json_output:
+        typer.echo(report.model_dump_json(indent=2))
+        return
+
+    vitals = (
+        f"[bold]Active Profile:[/bold] [cyan]{report.profile}[/cyan]\n"
+        f"[bold]Indexed Chunks:[/bold] {report.total_chunks} across {report.total_repos} repo(s)\n"
+        f"[bold]Iterations:[/bold] {report.iterations} per query ({len(report.queries)} queries)"
+    )
+    console.print(Panel(vitals, title="Benchmark Configuration", border_style="cyan"))
+
+    bench_table = Table(title="Retrieval Latency Breakdown", show_header=True)
+    bench_table.add_column("Stage", style="bold cyan")
+    bench_table.add_column("Iterations", justify="right")
+    bench_table.add_column("Min", justify="right")
+    bench_table.add_column("P50", justify="right", style="green")
+    bench_table.add_column("P95", justify="right", style="yellow")
+    bench_table.add_column("P99", justify="right", style="red")
+    bench_table.add_column("Mean", justify="right")
+
+    stages = [
+        ("Stage 1: Vector Search", report.stage1_vector),
+        ("Stage 1: Sparse FTS Search", report.stage1_fts),
+        ("Stage 1: Hybrid Fusion (RRF)", report.stage1_hybrid),
+    ]
+    if report.stage2_rerank:
+        stages.append(("Stage 2: Cross-Encoder Rerank", report.stage2_rerank))
+    stages.append(("End-to-End Pipeline", report.end_to_end))
+
+    for label, s in stages:
+        bench_table.add_row(
+            label,
+            str(s.iterations),
+            f"{s.min_ms:.1f}ms",
+            f"{s.p50_ms:.1f}ms",
+            f"{s.p95_ms:.1f}ms",
+            f"{s.p99_ms:.1f}ms",
+            f"{s.mean_ms:.1f}ms",
+        )
+
+    console.print(bench_table)
 
 
 @models_app.command(name="download")

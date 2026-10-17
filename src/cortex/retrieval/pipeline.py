@@ -97,6 +97,26 @@ class HybridRetrievalPipeline:
             table_name=table_name,
         )
 
+    def search_stage1(
+        self,
+        query: str,
+        limit: int | None = None,
+        scopes: Sequence[ChunkScope] | None = None,
+        include_archived: bool = False,
+        category: ChunkCategory | None = None,
+        repo: str | None = None,
+    ) -> list[SearchResultChunk]:
+        """Execute Stage 1 Hybrid retrieval without cross-encoder reranking."""
+        return self.search(
+            query=query,
+            limit=limit,
+            scopes=scopes,
+            include_archived=include_archived,
+            category=category,
+            repo=repo,
+            rerank=False,
+        )
+
     def search(
         self,
         query: str,

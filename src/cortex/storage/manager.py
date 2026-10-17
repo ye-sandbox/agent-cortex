@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import os
+import warnings
 from collections.abc import Sequence
+from datetime import timedelta
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +14,7 @@ import lancedb
 from lancedb.db import DBConnection
 from lancedb.index import FTS
 from lancedb.table import Table
+from pydantic import BaseModel, ConfigDict, Field
 
 from cortex.models.chunk import DocumentChunk
 from cortex.storage.schema import (
@@ -20,6 +23,31 @@ from cortex.storage.schema import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class CompactionResult(BaseModel):
+    """Metrics and disk space savings from a table compaction operation."""
+
+    model_config = ConfigDict(frozen=True)
+
+    table_name: str
+    chunks_count: int
+    bytes_before: int
+    bytes_after: int
+    bytes_freed: int = Field(default=0)
+
+
+def _get_table_disk_size(path: Path) -> int:
+    """Calculate the total on-disk size in bytes for a table directory."""
+    if not path.exists():
+        return 0
+    if path.is_file():
+        return path.stat().st_size
+    total = 0
+    for entry in path.rglob("*"):
+        if entry.is_file():
+            total += entry.stat().st_size
+    return total
 
 
 def validate_storage_path(path: Path | str) -> Path:
@@ -257,3 +285,88 @@ class StorageManager:
             builder = builder.where(f"repo = '{safe_repo}'")
         results: list[dict[str, Any]] = builder.to_list()
         return results
+
+    def compact_table(
+        self,
+        table_name: str = "chunks",
+        cleanup_older_than: timedelta | None = None,
+        delete_unverified: bool = True,
+    ) -> CompactionResult:
+        """Run LanceDB compaction, fragment pruning, and index optimization on a table."""
+        if table_name not in self.table_names():
+            msg = f"Table '{table_name}' does not exist in database at '{self.data_dir}'."
+            raise ValueError(msg)
+
+        table_dir = self.data_dir / f"{table_name}.lance"
+        bytes_before = _get_table_disk_size(table_dir)
+
+        tbl = self._db.open_table(table_name)
+        with warnings.catch_warnings():
+            warnings.filterwarnings("ignore", message=".*removes every version except the latest.*")
+            tbl.optimize(cleanup_older_than=cleanup_older_than, delete_unverified=delete_unverified)
+
+        bytes_after = _get_table_disk_size(table_dir)
+        bytes_freed = max(0, bytes_before - bytes_after)
+        chunks_count = int(tbl.count_rows())
+
+        return CompactionResult(
+            table_name=table_name,
+            chunks_count=chunks_count,
+            bytes_before=bytes_before,
+            bytes_after=bytes_after,
+            bytes_freed=bytes_freed,
+        )
+
+    def compact_all(
+        self,
+        cleanup_older_than: timedelta | None = None,
+        delete_unverified: bool = True,
+    ) -> list[CompactionResult]:
+        """Run compaction and optimization across all existing tables."""
+        tables = self.table_names()
+        results: list[CompactionResult] = []
+        for name in tables:
+            res = self.compact_table(
+                table_name=name,
+                cleanup_older_than=cleanup_older_than,
+                delete_unverified=delete_unverified,
+            )
+            results.append(res)
+        return results
+
+    def cleanup_orphan_repos(
+        self,
+        active_repos: Sequence[str],
+        table_name: str = "chunks",
+    ) -> int:
+        """Purge chunks belonging to repositories not present in active_repos list.
+
+        Returns the number of deleted orphan chunks.
+        """
+        if table_name not in self.table_names():
+            return 0
+        if not active_repos:
+            logger.warning(
+                "cleanup_orphan_repos called with empty active_repos; skipping deletion."
+            )
+            return 0
+
+        tbl = self._db.open_table(table_name)
+        count_before = int(tbl.count_rows())
+
+        safe_repos = [r.strip().replace("'", "''") for r in active_repos if r.strip()]
+        if not safe_repos:
+            return 0
+
+        repo_list = ", ".join(f"'{r}'" for r in safe_repos)
+        tbl.delete(f"repo NOT IN ({repo_list})")
+
+        count_after = int(tbl.count_rows())
+        deleted = max(0, count_before - count_after)
+        logger.info(
+            "Purged %d orphan chunk(s) from table '%s' not belonging to active repos: %s",
+            deleted,
+            table_name,
+            safe_repos,
+        )
+        return deleted
