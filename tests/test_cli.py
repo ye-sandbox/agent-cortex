@@ -443,3 +443,43 @@ def test_cli_mcp_invokes_runner() -> None:
         result = runner.invoke(app, ["mcp"])
         assert result.exit_code == 0
         assert mock_server_main.called
+
+
+def test_cli_serve_help() -> None:
+    result = runner.invoke(app, ["serve", "--help"])
+    assert result.exit_code == 0
+    assert "Launch the agent-cortex daemon HTTP server" in result.stdout
+    assert "--host" in result.stdout
+    assert "--port" in result.stdout
+    assert "--api-key" in result.stdout
+
+
+def test_cli_serve_invokes_run_server() -> None:
+    with patch("cortex.server.run_server") as mock_run_server:
+        result = runner.invoke(
+            app,
+            ["serve", "--host", "0.0.0.0", "--port", "9090", "--api-key", "my-key"],
+        )
+        assert result.exit_code == 0
+        assert mock_run_server.called
+        _, kwargs = mock_run_server.call_args
+        assert kwargs["host"] == "0.0.0.0"
+        assert kwargs["port"] == 9090
+        assert kwargs["api_key"] == "my-key"
+
+
+def test_cli_search_with_remote_options() -> None:
+    with patch("cortex.cli.CortexClient") as mock_client_cls:
+        mock_instance = MagicMock()
+        mock_instance.search.return_value = []
+        mock_client_cls.return_value = mock_instance
+
+        result = runner.invoke(
+            app,
+            ["search", "query test", "--remote", "--hub-url", "http://hub:8000"],
+        )
+        assert result.exit_code == 0
+        assert mock_client_cls.called
+        _, kwargs = mock_client_cls.call_args
+        assert kwargs["mode"] == "remote"
+        assert kwargs["hub_url"] == "http://hub:8000"

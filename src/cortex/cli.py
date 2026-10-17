@@ -12,6 +12,7 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
+from cortex.client import ClientMode, CortexClient
 from cortex.config.loader import (
     CortexConfig,
     get_default_config_path,
@@ -366,6 +367,20 @@ def search(
             help="Enable or disable Stage 2 cross-encoder reranking.",
         ),
     ] = True,
+    remote: Annotated[
+        bool | None,
+        typer.Option(
+            "--remote/--local",
+            help="Force querying remote hub or local in-process storage.",
+        ),
+    ] = None,
+    hub_url: Annotated[
+        str | None,
+        typer.Option(
+            "--hub-url",
+            help="Remote agent-cortex hub endpoint override (e.g. 'http://homelab:8000').",
+        ),
+    ] = None,
     json_output: Annotated[
         bool,
         typer.Option(
@@ -414,9 +429,38 @@ def search(
             console.print(f"[bold red]Error:[/bold red] Invalid category '{category}'.")
             raise typer.Exit(code=1) from None
 
+    mode: ClientMode = "auto"
+    if remote is True:
+        mode = "remote"
+    elif remote is False:
+        mode = "in_process"
+
+    local_pipeline = (
+        HybridRetrievalPipeline.from_config(cfg, profile_override=profile) if profile else None
+    )
+
+    client = CortexClient(
+        mode=mode,
+        hub_url=hub_url,
+        config=cfg,
+        pipeline=local_pipeline,
+    )
+
     try:
-        pipeline = HybridRetrievalPipeline.from_config(cfg, profile_override=profile)
-        results = pipeline.search(
+        if json_output:
+            for res in client.search_stream(
+                query=cleaned_query,
+                limit=limit,
+                scopes=scopes,
+                include_archived=include_archived,
+                category=cat,
+                repo=repo,
+                rerank=rerank,
+            ):
+                typer.echo(res.model_dump_json())
+            return
+
+        results = client.search(
             query=cleaned_query,
             limit=limit,
             scopes=scopes,
@@ -428,11 +472,6 @@ def search(
     except Exception as exc:
         console.print(f"[bold red]Search failed:[/bold red] {exc}")
         raise typer.Exit(code=1) from None
-
-    if json_output:
-        for res in results:
-            typer.echo(res.model_dump_json())
-        return
 
     if not results:
         console.print("[yellow]No matching chunks found.[/yellow]")
@@ -631,6 +670,84 @@ def mcp_server_cmd() -> None:
     from cortex.mcp_server import main as run_mcp_server
 
     run_mcp_server()
+
+
+@app.command()
+def serve(
+    host: Annotated[
+        str,
+        typer.Option(
+            "--host",
+            "-h",
+            help="Network interface host to bind the server to.",
+        ),
+    ] = "127.0.0.1",
+    port: Annotated[
+        int,
+        typer.Option(
+            "--port",
+            "-p",
+            help="TCP port to bind the server to.",
+        ),
+    ] = 8000,
+    api_key: Annotated[
+        str | None,
+        typer.Option(
+            "--api-key",
+            help="Bearer token for securing endpoints (overrides CORTEX_API_KEY).",
+        ),
+    ] = None,
+    log_level: Annotated[
+        str,
+        typer.Option(
+            "--log-level",
+            help="Log level for uvicorn (critical, error, warning, info, debug, trace).",
+        ),
+    ] = "info",
+    config_path: Annotated[
+        Path | None,
+        typer.Option(
+            "--config-path",
+            "-c",
+            help="Custom configuration path.",
+        ),
+    ] = None,
+) -> None:
+    """Launch the agent-cortex daemon HTTP server."""
+    from cortex.server import run_server
+
+    cfg = load_config(config_path)
+    effective_api_key = api_key or cfg.remote.api_key
+    profile = cfg.get_active_profile()
+
+    auth_status = (
+        "[green]Enabled (Bearer token required)[/green]"
+        if effective_api_key
+        else "[yellow]Disabled (Open access)[/yellow]"
+    )
+
+    console.print(
+        Panel(
+            f"[bold cyan]agent-cortex[/bold cyan] daemon server\n\n"
+            f"Endpoint: [bold green]http://{host}:{port}[/bold green]\n"
+            f"Authentication: {auth_status}\n"
+            f"Hardware Profile: [cyan]{profile.name}[/cyan]\n"
+            f"Storage: [dim]{cfg.storage.data_dir}[/dim]",
+            title="Cortex Hub Daemon",
+            border_style="cyan",
+        )
+    )
+
+    try:
+        run_server(
+            host=host,
+            port=port,
+            api_key=effective_api_key,
+            config=cfg,
+            log_level=log_level,
+        )
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Daemon server stopped by user.[/yellow]")
 
 
 def main() -> None:
