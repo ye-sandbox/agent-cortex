@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal
 
 import httpx
 
+from cortex.config.dynamic import DynamicConfigManager
 from cortex.config.loader import CortexConfig, load_config
 from cortex.mcp_server import RepoContractChunk, TechSummary, TechUsage
 from cortex.models.chunk import ChunkCategory, ChunkScope, SearchResultChunk
@@ -58,14 +60,24 @@ class CortexClient:
         mode: ClientMode = "auto",
         hub_url: str | None = None,
         api_key: str | None = None,
+        tenant_id: str | None = None,
         timeout: float = 30.0,
         config: CortexConfig | None = None,
         pipeline: HybridRetrievalPipeline | None = None,
         storage: StorageManager | None = None,
+        dynamic_config: DynamicConfigManager | None = None,
     ) -> None:
         self.config = config or load_config()
         self.mode = mode
         self.timeout = timeout
+
+        # Resolve tenant ID (from param, env, or default)
+        env_tenant = os.environ.get("CORTEX_TENANT_ID")
+        self.tenant_id = (
+            tenant_id.strip()
+            if tenant_id and tenant_id.strip()
+            else (env_tenant.strip() if env_tenant and env_tenant.strip() else "default")
+        )
 
         # Resolve hub URL and API key from args, then config
         self.hub_url = (
@@ -83,14 +95,18 @@ class CortexClient:
             msg = "Remote mode requested but no hub_url provided or configured."
             raise ValueError(msg)
 
-        # Lazy local pipeline and storage instances
+        # Lazy local pipeline, storage, and dynamic config instances
         self._pipeline = pipeline
         self._storage = storage
+        self._dynamic_config = dynamic_config
 
         # HTTP client for remote communications
         headers: dict[str, str] = {}
         if self.api_key:
             headers["Authorization"] = f"Bearer {self.api_key}"
+        if self.tenant_id:
+            headers["X-Tenant-ID"] = self.tenant_id
+
         self._http_client = httpx.Client(
             headers=headers,
             timeout=self.timeout,
@@ -120,6 +136,11 @@ class CortexClient:
         if self._storage is None:
             self._storage = StorageManager(self.config.storage.data_dir)
         return self._storage
+
+    def _get_dynamic_config(self) -> DynamicConfigManager:
+        if self._dynamic_config is None:
+            self._dynamic_config = DynamicConfigManager(data_dir=self.config.storage.data_dir)
+        return self._dynamic_config
 
     def _should_use_remote(self) -> bool:
         if self.mode == "remote":
@@ -371,9 +392,16 @@ class CortexClient:
                 else ChunkCategory(str(category).lower())
             )
 
+        effective_limit = limit
+        if effective_limit is None:
+            dyn_cfg = self._get_dynamic_config().get_tenant_config(
+                self.tenant_id, fallback=self.config
+            )
+            effective_limit = dyn_cfg.retrieval.default_limit
+
         return pipe.search(
             query=query,
-            limit=limit,
+            limit=effective_limit,
             scopes=resolved_scopes,
             include_archived=include_archived,
             category=resolved_cat,
@@ -563,4 +591,148 @@ class CortexClient:
             )
         if repo:
             payload["repo"] = repo
+        if self.tenant_id and self.tenant_id != "default":
+            payload["tenant_id"] = self.tenant_id
         return payload
+
+    def get_config(self, tenant_id: str | None = None) -> dict[str, Any]:
+        """Retrieve effective configuration for a tenant (remote or local DB-backed)."""
+        target_tenant = tenant_id.strip() if tenant_id and tenant_id.strip() else self.tenant_id
+
+        if self._should_use_remote() and self.hub_url:
+            try:
+                headers = {"X-Tenant-ID": target_tenant}
+                resp = self._http_client.get(
+                    f"{self.hub_url}/config",
+                    headers=headers,
+                    params={"tenant_id": target_tenant},
+                )
+                if resp.status_code == 401:
+                    raise CortexAuthError()
+                resp.raise_for_status()
+                res_json: dict[str, Any] = resp.json()
+                return res_json
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
+
+        dyn_mgr = self._get_dynamic_config()
+        cfg = dyn_mgr.get_tenant_config(target_tenant, fallback=self.config)
+        return cfg.model_dump(mode="json")
+
+    def set_config(
+        self,
+        config_data: dict[str, Any] | CortexConfig,
+        tenant_id: str | None = None,
+        description: str = "",
+    ) -> dict[str, Any]:
+        """Upsert runtime configuration for a tenant in remote hub or local LanceDB table."""
+        target_tenant = tenant_id.strip() if tenant_id and tenant_id.strip() else self.tenant_id
+        dict_data = (
+            config_data.model_dump(mode="json")
+            if isinstance(config_data, CortexConfig)
+            else dict(config_data)
+        )
+
+        if self._should_use_remote() and self.hub_url:
+            try:
+                headers = {"X-Tenant-ID": target_tenant}
+                payload = {
+                    "tenant_id": target_tenant,
+                    "config": dict_data,
+                    "description": description,
+                }
+                resp = self._http_client.post(
+                    f"{self.hub_url}/config",
+                    headers=headers,
+                    json=payload,
+                )
+                if resp.status_code == 401:
+                    raise CortexAuthError()
+                resp.raise_for_status()
+                res_json: dict[str, Any] = resp.json()
+                return res_json
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
+
+        dyn_mgr = self._get_dynamic_config()
+        saved = dyn_mgr.set_tenant_config(target_tenant, dict_data, description=description)
+        return {"status": "ok", "tenant_id": target_tenant, "config": saved}
+
+    def delete_config(self, tenant_id: str | None = None) -> bool:
+        """Delete dynamic configuration overrides for a tenant."""
+        target_tenant = tenant_id.strip() if tenant_id and tenant_id.strip() else self.tenant_id
+
+        if self._should_use_remote() and self.hub_url:
+            try:
+                headers = {"X-Tenant-ID": target_tenant}
+                resp = self._http_client.delete(
+                    f"{self.hub_url}/config",
+                    headers=headers,
+                    params={"tenant_id": target_tenant},
+                )
+                if resp.status_code == 401:
+                    raise CortexAuthError()
+                resp.raise_for_status()
+                res_data = resp.json()
+                return bool(isinstance(res_data, dict) and res_data.get("deleted", False))
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
+
+        dyn_mgr = self._get_dynamic_config()
+        return dyn_mgr.delete_tenant_config(target_tenant)
+
+    def list_tenants(self) -> list[dict[str, Any]]:
+        """List configured tenants from remote hub or local LanceDB table."""
+        if self._should_use_remote() and self.hub_url:
+            try:
+                resp = self._http_client.get(f"{self.hub_url}/tenants")
+                if resp.status_code == 401:
+                    raise CortexAuthError()
+                resp.raise_for_status()
+                res_data = resp.json()
+                if isinstance(res_data, dict):
+                    raw_tenants = res_data.get("tenants", [])
+                    if isinstance(raw_tenants, list):
+                        return [t for t in raw_tenants if isinstance(t, dict)]
+                return []
+            except (httpx.ConnectError, httpx.TimeoutException, httpx.NetworkError) as exc:
+                logger.error(
+                    "Remote hub at '%s' unreachable: %s. Aborting request.",
+                    self.hub_url,
+                    exc,
+                )
+                raise CortexRemoteError(
+                    f"Remote hub at '{self.hub_url}' is unreachable: {exc}. "
+                    "Aborting request as remote hub is configured.",
+                    hub_url=self.hub_url,
+                ) from exc
+
+        dyn_mgr = self._get_dynamic_config()
+        return dyn_mgr.list_tenants()

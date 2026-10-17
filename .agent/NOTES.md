@@ -48,6 +48,14 @@ $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
   - `low`: `bge-small-en-v1.5` (384 dim), Reranker disabled (pure Stage 1 RRF, < 20ms)
   - `custom`: Declared in `config.yaml`
 
+### 4. Dynamic Configuration & Multi-Tenant Resolution
+
+Runtime configuration can be persisted and managed dynamically without daemon restarts:
+- **Storage Table:** Embedded LanceDB table `runtime_configs` located in `storage.data_dir`.
+- **Resolution Order:** Base static fallback (`config.yaml`) $\leftarrow$ default DB record (`tenant_id == "default"`) $\leftarrow$ tenant-specific DB overrides (`tenant_id == "<id>"`).
+- **Tenant Identification:** Remote hub daemon resolves tenant via `X-Tenant-ID` header, query parameter `?tenant_id=...`, POST body `"tenant_id": "..."`, or tenant-specific Bearer token mapped from `remote.api_key`. Defaults to `"default"` tenant if unspecified.
+- **Dynamic Caching:** Retrieval pipelines are cached per configuration profile and weights to ensure zero redundant FastEmbed model initializations.
+
 ---
 
 ## Gotchas & Pitfalls
@@ -66,4 +74,4 @@ $$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 
 | Debt | Rationale | Revisit When |
 |---|---|---|
-| In-memory configuration defaults | Avoid complex DB config tables during MVP | After Phase 3 (Dual-Mode Remote) |
+| None active | All Phase 1-3 baseline debts resolved | Post-Release [99.1] |
