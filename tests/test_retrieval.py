@@ -175,3 +175,84 @@ def test_hybrid_retrieval_fusion_and_scoring() -> None:
         assert len(infra_results) == 1
         assert infra_results[0].category == ChunkCategory.INFRA
         assert infra_results[0].id == "sentinel:compose.yaml:redis"
+
+
+def test_two_stage_retrieval_with_reranker() -> None:
+    """Test 2-stage retrieval: Stage 1 RRF candidate pool + Stage 2 Cross-Encoder rerank."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+
+        embeddings = EmbeddingEngine(
+            passage_embed_fn=lambda texts: [[0.5, 0.5] for _ in texts],
+            query_embed_fn=lambda q: [0.5, 0.5],
+        )
+
+        from cortex.models.chunk import DocumentChunk
+
+        chunks = [
+            DocumentChunk(
+                id="sentinel:docs/guide.md:intro",
+                repo="sentinel",
+                file_path="docs/guide.md",
+                category=ChunkCategory.DOC,
+                lifecycle=ChunkLifecycle.ACTIVE,
+                scope=ChunkScope.INTERNAL,
+                breadcrumb="Introduction",
+                commit_sha="c1",
+                tags=["guide"],
+                content="Basic introductory documentation about sentinel architecture.",
+                vector=None,
+            ),
+            DocumentChunk(
+                id="sentinel:specs/openapi.json:deals",
+                repo="sentinel",
+                file_path="specs/openapi.json",
+                category=ChunkCategory.CONTRACT,
+                lifecycle=ChunkLifecycle.ACTIVE,
+                scope=ChunkScope.INTERNAL,
+                breadcrumb="GET /deals",
+                commit_sha="c2",
+                tags=["deals"],
+                content="Exact specification for deals querying endpoint.",
+                vector=None,
+            ),
+        ]
+
+        storage.upsert_chunks(embeddings.embed_chunks(chunks), dim=2)
+
+        # Cross-encoder scoring hook that scores 'exact specification' highest
+        def mock_rerank(query: str, passages: Sequence[str]) -> list[float]:
+            scores: list[float] = []
+            for p in passages:
+                if "exact specification" in p.lower():
+                    scores.append(0.99)
+                else:
+                    scores.append(0.20)
+            return scores
+
+        from cortex.models.profile import HardwareProfileName
+        from cortex.retrieval.reranker import RerankerEngine
+
+        reranker = RerankerEngine(
+            profile=HardwareProfileName.BALANCED,
+            rerank_fn=mock_rerank,
+        )
+
+        pipeline = HybridRetrievalPipeline(
+            storage=storage,
+            embeddings=embeddings,
+            reranker=reranker,
+        )
+
+        # 1. Search with reranker enabled (default)
+        reranked_results = pipeline.search("deals", limit=2)
+        assert len(reranked_results) == 2
+        # Cross-encoder should place the exact specification first with score 0.99
+        assert reranked_results[0].id == "sentinel:specs/openapi.json:deals"
+        assert reranked_results[0].score == 0.99
+
+        # 2. Search with rerank=False (bypass reranker)
+        stage1_only = pipeline.search("deals", limit=2, rerank=False)
+        assert len(stage1_only) == 2
+        # Score is RRF score rather than cross-encoder score
+        assert stage1_only[0].score < 0.99

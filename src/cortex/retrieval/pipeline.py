@@ -14,6 +14,7 @@ from cortex.models.chunk import (
     ChunkScope,
     SearchResultChunk,
 )
+from cortex.retrieval.reranker import RerankerEngine
 from cortex.storage.manager import StorageManager
 
 logger = logging.getLogger(__name__)
@@ -57,12 +58,14 @@ class HybridRetrievalPipeline:
         self,
         storage: StorageManager,
         embeddings: EmbeddingEngine,
+        reranker: RerankerEngine | None = None,
         config: RetrievalConfig | None = None,
         table_name: str = "chunks",
     ) -> None:
         """Initialize hybrid retrieval pipeline."""
         self.storage = storage
         self.embeddings = embeddings
+        self.reranker = reranker
         self.config = config or RetrievalConfig()
         self.table_name = table_name
 
@@ -74,14 +77,22 @@ class HybridRetrievalPipeline:
         include_archived: bool = False,
         category: ChunkCategory | None = None,
         repo: str | None = None,
+        rerank: bool = True,
     ) -> list[SearchResultChunk]:
-        """Execute Stage 1 Hybrid retrieval combining dense and sparse search."""
+        """Execute Stage 1 Hybrid retrieval combining dense and sparse search,
+        optionally reranked with Stage 2 cross-encoder.
+        """
         cleaned_query = query.strip()
         if not cleaned_query:
             return []
 
         effective_limit = limit if limit is not None else self.config.default_limit
-        candidate_pool_size = max(effective_limit * 3, 30)
+        is_reranker_active = rerank and self.reranker is not None and self.reranker.is_enabled
+
+        if is_reranker_active and self.reranker is not None:
+            candidate_pool_size = max(self.reranker.candidate_pool_size, effective_limit, 30)
+        else:
+            candidate_pool_size = max(effective_limit * 3, 30)
 
         where_clause = build_where_clause(scopes=scopes, category=category, repo=repo)
 
@@ -157,6 +168,17 @@ class HybridRetrievalPipeline:
                 )
             )
 
-        # 5. Sort by fused score descending and slice to limit
+        # 5. Sort by fused score descending
         results.sort(key=lambda r: r.score, reverse=True)
+
+        # 6. Stage 2: Precision Cross-Encoder Reranking
+        if is_reranker_active and self.reranker is not None:
+            pool_limit = max(self.reranker.candidate_pool_size, effective_limit)
+            stage1_candidates = results[:pool_limit]
+            return self.reranker.rerank(
+                query=cleaned_query,
+                items=stage1_candidates,
+                top_k=effective_limit,
+            )
+
         return results[:effective_limit]
