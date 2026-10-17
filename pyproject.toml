@@ -1,0 +1,53 @@
+[project]
+name = "agent-cortex"
+version = "0.1.0"
+description = "Cross-repository semantic memory and portfolio knowledge engine for autonomous agents and developers"
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "yegear", email = "yegear@users.noreply.github.com" }
+]
+dependencies = [
+    "pydantic>=2.7.0",
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+    "pyyaml>=6.0.1",
+    "mcp>=1.0.0",
+]
+
+[project.optional-dependencies]
+ml = [
+    "lancedb>=0.6.0",
+    "fastembed>=0.2.6",
+]
+dev = [
+    "pytest>=8.0.0",
+    "ruff>=0.4.0",
+    "mypy>=1.10.0",
+    "types-pyyaml>=6.0.12.20240311",
+]
+
+[project.scripts]
+cortex = "cortex.cli:main"
+cortex-mcp = "cortex.mcp_server:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP", "B", "SIM"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_configs = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]

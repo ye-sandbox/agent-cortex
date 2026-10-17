@@ -1,109 +1,153 @@
-# Core / Greenfield Agent-Driven Development (ADD) Template
+# agent-cortex
+
+[![CI](https://github.com/ye-sandbox/agent-cortex/actions/workflows/ci.yml/badge.svg)](https://github.com/ye-sandbox/agent-cortex/actions)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
+[![Architecture: In--Process LanceDB](https://img.shields.io/badge/Storage-LanceDB%20Embedded-green.svg)](https://lancedb.github.io/lancedb/)
 
 🌐 **English | [Português](README.pt-br.md)**
 
-This repository is the canonical **Core / Greenfield** starter kit designed to empower software development from scratch with **AI coding agents** (e.g., Antigravity, Claude Code, Cursor, Windsurf, Roo Code, Aider, etc.).
+**Cross-repository semantic memory and portfolio knowledge engine for autonomous AI agents and software engineers.**
 
-The structure directly addresses the primary bottlenecks when using autonomous agents in real-world projects: **context loss**, **hallucinations during long tasks**, **violation of coding standards**, and **destructive rework**.
+`agent-cortex` turns multi-repository portfolios into an active, queryable long-term memory (LTM). It enables instant natural language discovery of past architectural solutions, reusable interfaces, and system contracts across dozens of repositories without persistent daemon overhead.
 
 ---
 
-## 📁 Template Structure
+## ⚡ Why agent-cortex?
 
-```text
-├── AGENTS.md                 # Project "Constitution" (strict rules, stack, MCPs, validation commands)
-├── .agent/
-│   ├── TASK.md               # Active task, acceptance criteria, and immediate roadmap
-│   ├── NOTES.md              # Rapid architectural decisions, data contracts, and gotchas
-│   ├── ARCHIVE.md            # Historical log of completed tasks (preserves lean context)
-│   ├── ECOSYSTEM.md          # Multi-repo topology, cross-repo contracts, and blast radius (optional)
-│   ├── adr/                  # Complex Architectural Decision Records (formal ADRs)
-│   │   └── 000-template.md   # Standard ADR template
-│   └── skills/               # Specialized procedural skills for the project
-│       ├── README.md         # Guide on when and how to create skills
-│       └── 000-template.md   # Standard SKILL.md template
-├── .env.example              # Example environment variables
-├── .gitignore                # Comprehensive defaults (Node, Python, Docker, agent caches)
-└── README.md                 # This guide (for human developers)
+In growing software ecosystems with autonomous agents (Antigravity, Cursor, Claude Code, Dev Trinity), development often suffers from **organizational amnesia**:
+- Planners reinvent existing patterns because they lack cross-repo visibility.
+- Engineers waste cognitive energy searching through dozens of local folders to recall where an architectural challenge was previously solved.
+- Contract drift and inconsistent conventions proliferate across microservices.
+
+`agent-cortex` solves this by continuously indexing curated documentation, contracts, and infrastructure manifests, exposing sub-50ms hybrid retrieval through a terminal CLI and an MCP Server.
+
+---
+
+## 🏛️ Architecture
+
 ```
+┌────────────────────────────────────────────────────────────────────────┐
+│                        PORTFOLIO SOURCE REPOSITORIES                   │
+│   ia-maestri   │   agent-guard   │   taskctl   │  satellites / services │
+│   (docs/specs) │   (invariants)  │  (contracts)│    (compose/apis)     │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Git Diff Tracking (Incremental)
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                        AGENT-CORTEX INGESTION ENGINE                   │
+│  - Semantic chunking (Markdown headers, OpenAPI routes, Compose svcs)  │
+│  - Metadata extraction (repo, breadcrumbs, tags, lifecycle status)     │
+│  - Local CPU FastEmbed (BGE-M3 / ONNX Runtime, zero PyTorch/GPU)       │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                      HYBRID RETRIEVAL & RERANKING                      │
+│  Stage 1: LanceDB Embedded (Dense IVF-PQ + Tantivy BM25 + RRF Fusion)   │
+│  Stage 2: Cross-Encoder Reranker (BGE-Reranker for precision top-K)    │
+│  Storage: Apache Arrow / Parquet in local filesystem (Zero RAM idle)   │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+            ┌───────────────────────┴───────────────────────┐
+            ▼                                               ▼
+┌───────────────────────┐                       ┌───────────────────────┐
+│     TERMINAL CLI      │                       │   MCP SERVER (stdio)  │
+│  cortex search ...    │                       │  Planners, Antigravity│
+│  Output: ANSI / JSON  │                       │  and Autonomous Agents│
+└───────────────────────┘                       └───────────────────────┘
+```
+
+### Key Architectural Invariants:
+1. **In-Process & Zero Daemon:** Built on embedded LanceDB and FastEmbed ONNX. Consumes zero RAM when idle and cold-starts in < 30ms.
+2. **Two-Stage Precision Retrieval:** Combines Dense Vector + BM25 Lexical search via Reciprocal Rank Fusion (RRF), followed by a Cross-Encoder Reranker to eliminate false positives.
+3. **Public Engine / Private Data Isolation:** The engine is open-source and public; all generated embeddings and portfolio code chunks are stored outside the Git tree in user-local directories (`~/.local/share/agent-cortex/`).
+4. **Dual-Mode Operation:** Operates locally on individual workstations or connects remotely to a central homelab hub.
 
 ---
 
 ## 🚀 Quickstart
 
-### Option 1: Automated One-Liner (Recommended)
+### Prerequisites
+- Python 3.12+
+- [`uv`](https://github.com/astral-sh/uv) (recommended) or `pip`
 
-Bootstrap a new project instantly from your terminal:
-
+### Installation
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ye-sandbox/template-agent/greenfield/init.sh | bash -s -- my-new-project
+git clone https://github.com/ye-sandbox/agent-cortex.git
+cd agent-cortex
+uv sync
 ```
 
-The script clones the `greenfield` branch, initializes a fresh Git repository, and drops setup-only files automatically.
-
----
-
-### Option 2: Manual Git Clone
-
+### Indexing Repositories
 ```bash
-git clone --depth 1 -b greenfield https://github.com/ye-sandbox/template-agent.git my-new-project
-cd my-new-project
-rm -rf .git && git init -b main
-git add . && git commit -m "chore: initial template setup"
+# Scan and index a local portfolio directory
+uv run cortex sync ~/github/ye-sandbox/
+
+# Or index a single repository
+uv run cortex sync ~/github/ye-sandbox/poc-mod-maestri
 ```
 
-### Step 2: Configure `AGENTS.md`
-Open [`AGENTS.md`](./AGENTS.md) and replace all placeholder fields in `[BRACKETS]`:
-1. Project name and architectural overview.
-2. Operating system and **default shell** (e.g., Bash or PowerShell).
-3. Technology stack for each module/service (languages, versions, official package managers).
-4. Authorized MCP servers and domain skills.
-5. Exact validation commands (`test`, `lint`, `typecheck`, `build`).
-6. Remove inapplicable sections (e.g. Docker section if containers are not used).
-7. Delete the `Adaptation checklist` at the bottom when finished.
-
-### Step 3: Configure Environment Variables & MCPs
-Copy the example environment file and configure local values:
+### Searching the Portfolio
 ```bash
-cp .env.example .env
-```
-If using MCP servers (local databases, API docs, observability), register them in your agent configuration (`antigravity`, `claude_desktop`, etc.).
+# Natural language semantic search
+uv run cortex search "reconexão automática websocket backoff"
 
-### Step 4: Define the First Task in `.agent/TASK.md`
-Open [`.agent/TASK.md`](./.agent/TASK.md):
-1. Fill the **📌 Active Task** section with the initial concrete goal (e.g., `Bootstrap project skeleton and validation tooling`).
-2. Specify clear, measurable **Acceptance Criteria**.
-3. Set status to `READY FOR PLANNING`.
+# Filter by category or repository
+uv run cortex search "victorialogs integration" --category infra --limit 3
 
-### Step 5: Begin Development with your AI Agent
-Send the kickoff prompt in your AI agent interface:
-> *"Read AGENTS.md, .agent/TASK.md, .agent/NOTES.md, and skills in .agent/skills/. Present your implementation plan for the Active Task in TASK.md before modifying any code."*
-
----
-
-## 🔄 Task Lifecycle Workflow
-
-```mermaid
-graph TD
-    A[User defines task in TASK.md] --> B[Agent reads docs and sets status to PLANNING]
-    B --> C[Agent presents Implementation Plan]
-    C --> D{User approves?}
-    D -- No / Revisions --> C
-    D -- Yes --> E[Status: RUNNING]
-    E --> F[Implementation with Strict Typing]
-    F --> G[100% Validation Commands Pass]
-    G --> H[Conventional Commit in English]
-    H --> I[Log task in Completed Log of TASK.md]
-    I --> J[Promote next task from Backlog]
+# Machine-readable JSON output for agent subshells
+uv run cortex search "SSE streaming retry" --json
 ```
 
 ---
 
-## 💡 Best Practices for AI Agents
+## 🤖 Model Context Protocol (MCP) Integration
 
-1. **One task at a time:** Keep tasks atomic. Break large goals into subtasks in `TASK.md`.
-2. **Enforce DoD (Definition of Done):** Never accept tasks with failing tests or unaddressed linter errors.
-3. **Keep context files lean:**
-   - `TASK.md` holds only the active task and titles of upcoming items.
-   - `NOTES.md` holds non-obvious rationale, contracts, and gotchas not evident from git diffs.
-   - Deep implementation details belong in git commit messages and history.
+`agent-cortex` ships with a stdio MCP server for direct integration into agent workflows:
+
+Add to your agent's MCP configuration (`antigravity.json`, `claude_desktop_config.json`, or Cursor):
+```json
+{
+  "mcpServers": {
+    "cortex": {
+      "command": "uv",
+      "args": ["--directory", "/path/to/agent-cortex", "run", "cortex-mcp"]
+    }
+  }
+}
+```
+
+### Available MCP Tools:
+- **`cortex_search(query, category?, repo?, limit?)`**: Executes hybrid search and returns snippets with `file://` links.
+- **`cortex_get_repo_contracts(repo)`**: Retrieves declared APIs, sockets, and interfaces for a specific repository.
+- **`cortex_list_technologies(tech_name)`**: Identifies all repositories using a specified framework or tool.
+
+---
+
+## ⚙️ Configuration (`config.yaml`)
+
+```yaml
+storage:
+  mode: "local"                             # "local" | "remote"
+  path: "~/.local/share/agent-cortex/data"
+
+models:
+  profile: "high-precision"                 # "fast" | "balanced" | "high-precision"
+  embedding:
+    model: "BAAI/bge-m3"
+  reranker:
+    enabled: true
+    model: "BAAI/bge-reranker-large"
+    top_k_retrieve: 30
+    top_k_return: 5
+
+indexing:
+  include_archived: true
+  archived_score_multiplier: 0.6
+```
+
+---
+
+## 📄 License
+
+MIT © [ye-sandbox](https://github.com/ye-sandbox)

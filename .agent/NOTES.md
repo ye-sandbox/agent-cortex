@@ -1,48 +1,43 @@
-# NOTES.md — Active Contracts and Runtime Memory
+# NOTES.md — Active Contracts and Runtime Memory (agent-cortex)
 
-> Stores the active runtime contracts (WHAT interacts with WHAT), live communication topology, and critical gotchas.
-> Historical architectural decisions live in [`docs/adr/decisions.md`](../docs/adr/decisions.md).
-> Formal individual ADRs live in [`.agent/adr/`](adr/).
-
----
-
-## How to Use this File
-
-1. **Read before planning.** Active contracts and gotchas here take precedence over unstated defaults.
-2. **Keep this file lean:** Only store ACTIVE contracts, live topology, open technical debt, and critical gotchas.
-3. **Architectural decisions:** Record in [`docs/adr/decisions.md`](../docs/adr/decisions.md). Do NOT accumulate historical decisions here to prevent context bloat.
+> Stores active runtime contracts, core algorithms, and critical gotchas.
+> Formal architectural decisions live in [`docs/adr/decisions.md`](../docs/adr/decisions.md).
 
 ---
 
 ## Active Contracts
 
-### 1. Multi-Agent Topology & Ensemble Contract (Dev Trinity Sentinel)
+### 1. Document Chunk Identification & Schema Contract
 
-For multi-agent orchestration via Maestri or Antigravity, the canonical topology is defined by the **Dev Trinity Sentinel Ensemble** (`dev-trinity-sentinel.maestripartitura`):
+Every indexed chunk is uniquely identifiable and deterministic across re-indexing runs:
 
-| Node / Role | Channel / Protocol | Consumer | Contract / Responsibilities |
-|---|---|---|---|
-| **Project Architect (Planner)** | Maestri IPC / Socket | Developer Terminal | Decomposes initiatives into `.agent/TASK.md`, promotes tasks with `taskctl next`, dispatches execution. |
-| **Software Developer** | PTY / Subshell (`aether-guard wrap`) | Scope Auditor | Surgical code implementation confined strictly to `Systems Involved`. Invokes `taskctl audit`. |
-| **Task & Scope Auditor** | Read-Only CLI / Socket | Planner & Developer | Independent audit against `.agent/TASK.md` criteria and DoD. Semantic exit codes: 0 (`[APPROVED]`), 1 (`[CHANGES REQUIRED]`), 2 (`[REJECTED]`). |
-| **Aether Sentinel** | Live Terminal & Rope (`#30D158`) | Developer Subshell | Real-time command interception, risk scoring (Safe/Audit/Block), NDJSON telemetry sink to VictoriaLogs. |
+- **ID Schema:** `{repo}:{file_path}:{chunk_index_or_hash}` (e.g. `ia-maestri:.agent/ECOSYSTEM.md:c2`)
+- **Metadata Contract:**
+  - `repo`: repository name (e.g. `poc-mod-maestri`)
+  - `file_path`: relative file path in target repo
+  - `category`: one of `["doc", "contract", "infra", "invariant", "solution"]`
+  - `lifecycle`: one of `["active", "archived", "deprecated"]`
+  - `breadcrumb`: heading hierarchy (e.g. `ia-maestri > ECOSYSTEM.md > 3. Interfaces`)
+  - `commit_sha`: git commit hash when indexed
+  - `tags`: extracted keywords / tech identifiers (e.g. `["websocket", "retry", "lancedb"]`)
 
-### 2. Runtime Data & Payload Contracts
+### 2. Hybrid Retrieval & Scoring Formula
 
-Full schemas live in code (`[src/models/]` or `[core/schemas/]`). This table maps high-level contracts:
+The search pipeline combines dense vector embeddings with sparse BM25 scores via Reciprocal Rank Fusion (RRF):
 
-| Channel / Route / Queue | Producer | Consumer | Payload Schema / Protocol | Notes |
-|---|---|---|---|---|
-| `[e.g.: GET /api/v1/items]` | `[Service API]` | `[Web Frontend]` | `[ItemSummaryResponse]` | `[Active pagination schema]` |
-| `[e.g.: queue:events:raw]` | `[Ingestion Worker]` | `[Event Parser]` | `[RawEventPayload]` | `[Redis stream / Kafka topic]` |
+$$RRF(d) = \sum_{m \in \{dense, sparse\}} \frac{w_m}{k + rank_m(d)}$$
 
-Contract changes require updating schemas on both sides within the same task.
+- Default constants: $k = 60$, $w_{dense} = 0.65$, $w_{sparse} = 0.35$.
+- **Lifecycle penalty:** If `lifecycle == "archived"`, the candidate score is multiplied by `0.6` unless explicitly queried with `--include-archived`.
+- **Reranker Step:** Top 30 candidates from RRF are passed through a Cross-Encoder (`BAAI/bge-reranker-large` or `base`) to produce the final top $K$ results.
 
 ---
 
 ## Gotchas & Pitfalls
 
-- **[Lib/Service]:** [unexpected behavior and mitigation]
+- **FastEmbed ONNX CPU Threads:** On multi-core CPUs, limit ONNX thread contention when invoked from within agent subshells (`OMP_NUM_THREADS=4`).
+- **File URI Portability:** Always normalize file paths into standard `file://` URLs that work across both Linux native and WSL2/Windows environments.
+- **Git Diff Renames:** Detect `R` (Rename) in `git diff --name-status` to avoid orphan records; delete the old path and upsert the new path.
 
 ---
 
@@ -50,4 +45,4 @@ Contract changes require updating schemas on both sides within the same task.
 
 | Debt | Rationale | Revisit When |
 |---|---|---|
-| | | |
+| In-memory configuration defaults | Avoid complex DB config tables during MVP | After Phase 3 (Dual-Mode Remote) |

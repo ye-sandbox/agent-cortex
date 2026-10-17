@@ -3,16 +3,31 @@
 .env.*
 !.env.example
 
-# High-frequency junk (safe before you pick a stack)
-node_modules/
+# Environment & Dependencies
 .venv/
 venv/
-__pycache__/
+node_modules/
 dist/
 build/
-*.log
+*.egg-info/
 
-# OS / IDE / agent scratch
+# Python Cache & Quality Tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Vector Storage & Portfolio Data (NEVER COMMIT PRIVATE ORG DATA)
+data/
+*.lance/
+*.parquet
+catalog_state.json
+catalog_cache/
+
+# OS / IDE / Agent Scratch
 .DS_Store
 Thumbs.db
 .idea/
@@ -21,20 +36,4 @@ Thumbs.db
 .gemini/
 .claude/
 .maestri/
-
-# Uncomment extras for your stack:
-# --- Python ---
-# *.py[cod]
-# .pytest_cache/
-# .mypy_cache/
-# .ruff_cache/
-# htmlcov/
-# .coverage
-# *.egg-info/
-# --- Node ---
-# .next/
-# .nuxt/
-# .turbo/
-# .parcel-cache/
-# npm-debug.log*
-# *.tsbuildinfo
+*.log
