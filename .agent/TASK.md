@@ -7,10 +7,10 @@
 
 ## Active Task
 
-### 📌 Task [03.2]: Dual-Mode Architecture & Homelab Hub
+### 📌 Task [90.1]: Storage Compaction & Portfolio Benchmarks
 
-- **Description:** Implement lightweight daemon server and client for remote portfolio querying. Provides streaming JSON/NDJSON endpoints, Bearer Token authentication (`CORTEX_API_KEY`), and seamless fallback between local in-process mode and remote hub mode.
-- **Systems Involved:** `src/cortex/server.py`, `src/cortex/client.py`, `src/cortex/cli.py`, `tests/`
+- **Description:** Implement LanceDB storage compaction (`optimize`/`compact`), orphan index cleanup, and performance benchmarking under large multi-repo portfolios.
+- **Systems Involved:** `src/cortex/storage/manager.py`, `src/cortex/cli.py`, `tests/`
 - **Action Type:**
   - [ ] Read-only / Documentation
   - [x] Source code changes
@@ -18,11 +18,9 @@
   *(Workflow: `READY FOR PLANNING` → `PLANNING` on presenting plan → approval → `RUNNING`)*
 
 ### Acceptance Criteria
-- [ ] Lightweight HTTP daemon with `/search`, `/contracts`, `/technologies`, and `/health` endpoints.
-- [ ] Support Bearer token authentication via `CORTEX_API_KEY`.
-- [ ] Dual-mode client interface with transparent fallback between local and remote.
-- [ ] CLI subcommand `cortex serve` to launch daemon.
-- [ ] Comprehensive hermetic tests with mock HTTP client/server.
+- [ ] Implement table compaction and old fragment cleanup in `StorageManager`.
+- [ ] Add CLI subcommand `cortex compact` (or `cortex storage compact`).
+- [ ] Latency benchmarking script / suite measuring Stage 1 & 2 query times.
 - [ ] Strict typing with `mypy --strict`, linters, and all tests passing.
 
 ---
@@ -41,10 +39,11 @@
 | [02.2] | Incremental Git Drift Ingestion | [`04957ec`] | 2026-10-17 |
 | [02.3] | CLI Interface (`cortex search`, `cortex sync`, `cortex status`) | [`01ca41a`] | 2026-10-17 |
 | [03.1] | MCP Server (`cortex_search`, `cortex_get_repo_contracts`, `cortex_list_technologies`) | [`5b5b71d`] | 2026-10-17 |
+| [03.2] | Dual-Mode Architecture & Homelab Hub | [`7901eeb`] | 2026-10-17 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **[90.1]** [Storage Compaction & Portfolio Benchmarks: LanceDB compaction, index cleanup, latency benchmarks under multi-repo portfolios] — `[perf]`
+- [ ] **[99.1]** [Release Tagging & GitHub Release: semver tagging, changelog generation, and distribution packaging] — `[rel]`
 
