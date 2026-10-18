@@ -197,3 +197,36 @@ def test_server_tenant_bearer_token_authentication(tmp_path: Path) -> None:
     resp = client.get("/config", headers={"Authorization": "Bearer secret-token-123"})
     assert resp.status_code == 200
     assert resp.json()["profile"] == "high"
+
+    # 5. Tenant token attempting to read or mutate another tenant gets 403 Forbidden
+    resp = client.get(
+        "/config",
+        headers={
+            "Authorization": "Bearer secret-token-123",
+            "X-Tenant-ID": "other-tenant",
+        },
+    )
+    assert resp.status_code == 403
+
+    resp = client.post(
+        "/config",
+        headers={"Authorization": "Bearer secret-token-123"},
+        json={"tenant_id": "other-tenant", "config": {"profile": "low"}},
+    )
+    assert resp.status_code == 403
+
+    resp = client.delete(
+        "/config",
+        headers={
+            "Authorization": "Bearer secret-token-123",
+            "X-Tenant-ID": "other-tenant",
+        },
+    )
+    assert resp.status_code == 403
+
+    # 6. Tenant token calling /tenants only sees its own tenant record
+    dyn_mgr.set_tenant_config("other-tenant", {"profile": "low"})
+    resp = client.get("/tenants", headers={"Authorization": "Bearer secret-token-123"})
+    assert resp.status_code == 200
+    assert resp.json()["total_tenants"] == 1
+    assert resp.json()["tenants"][0]["tenant_id"] == "tenant-secret"

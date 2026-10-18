@@ -6,6 +6,7 @@ management without requiring static configuration restarts.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
 import os
@@ -101,6 +102,43 @@ class DynamicConfigManager:
         except Exception as exc:  # noqa: BLE001
             logger.warning("Failed to list tenants from '%s': %s", self.table_name, exc)
             return []
+
+    def resolve_tenant_by_api_key(self, token: str) -> str | None:
+        """Resolve tenant_id matching a Bearer token in a single table scan."""
+        cleaned_token = token.strip()
+        if not cleaned_token or self.table_name not in self.table_names():
+            return None
+        tbl = self._db.open_table(self.table_name)
+        try:
+            rows: list[dict[str, Any]] = tbl.search().select(["tenant_id", "config_json"]).to_list()
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Failed to scan tenant API keys from '%s': %s", self.table_name, exc)
+            return None
+
+        for row in rows:
+            t_id = str(row.get("tenant_id", "")).strip()
+            if not t_id:
+                continue
+            try:
+                raw_cfg = json.loads(str(row.get("config_json", "{}")))
+            except Exception:  # noqa: BLE001
+                continue
+            if not isinstance(raw_cfg, dict):
+                continue
+
+            t_key: str | None = None
+            tenant_remote = raw_cfg.get("remote")
+            if isinstance(tenant_remote, dict):
+                raw_val = tenant_remote.get("api_key")
+                if raw_val:
+                    t_key = str(raw_val).strip()
+            if not t_key and "api_key" in raw_cfg and raw_cfg["api_key"]:
+                t_key = str(raw_cfg["api_key"]).strip()
+
+            if t_key and hmac.compare_digest(t_key.encode("utf-8"), cleaned_token.encode("utf-8")):
+                return t_id
+
+        return None
 
     def get_raw_config(self, tenant_id: str) -> dict[str, Any] | None:
         """Retrieve the unmerged raw JSON dictionary for a tenant if configured."""

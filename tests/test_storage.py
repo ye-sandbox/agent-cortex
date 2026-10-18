@@ -224,3 +224,46 @@ def test_storage_manager_fts_and_vector_indexing() -> None:
         # Vector index threshold (5 rows < 256 default)
         skipped = storage.create_vector_index()
         assert skipped is False
+
+
+def test_storage_manager_vector_dim_mismatch_and_recreation() -> None:
+    """Ensure dimension mismatch raises ValueError unless recreate_on_dim_mismatch is True."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        chunk_dim2 = DocumentChunk(
+            id="repo:doc.md:c0",
+            repo="repo",
+            file_path="doc.md",
+            category=ChunkCategory.DOC,
+            commit_sha="111",
+            content="two dimensional vector chunk",
+            vector=[0.1, 0.2],
+        )
+        storage.upsert_chunks([chunk_dim2], dim=2, create_fts=False)
+
+        chunk_dim4 = DocumentChunk(
+            id="repo:doc.md:c1",
+            repo="repo",
+            file_path="doc.md",
+            category=ChunkCategory.DOC,
+            commit_sha="222",
+            content="four dimensional vector chunk",
+            vector=[0.1, 0.2, 0.3, 0.4],
+        )
+        with pytest.raises(ValueError, match="Vector dimension mismatch"):
+            storage.upsert_chunks([chunk_dim4], dim=4, create_fts=False)
+
+        with pytest.raises(ValueError, match="Vector dimension mismatch"):
+            storage.vector_search([0.1, 0.2, 0.3, 0.4], limit=5)
+
+        # Recreate on mismatch (simulating cortex sync --force-full after profile switch)
+        storage.upsert_chunks(
+            [chunk_dim4],
+            dim=4,
+            create_fts=False,
+            recreate_on_dim_mismatch=True,
+        )
+        assert storage.count_chunks() == 1
+        hits = storage.vector_search([0.1, 0.2, 0.3, 0.4], limit=5)
+        assert len(hits) == 1
+        assert hits[0]["id"] == "repo:doc.md:c1"

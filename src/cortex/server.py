@@ -7,10 +7,10 @@ with multi-tenant resolution and Bearer token authentication.
 
 from __future__ import annotations
 
+import hmac
 import json
 import logging
-from collections import defaultdict
-from collections.abc import AsyncIterator, Sequence
+from collections.abc import AsyncIterator
 from typing import Any
 
 import uvicorn
@@ -23,7 +23,14 @@ from starlette.routing import Route
 
 from cortex.config.dynamic import DynamicConfigManager
 from cortex.config.loader import CortexConfig, load_config
-from cortex.models.chunk import ChunkCategory, ChunkScope, SearchResultChunk
+from cortex.models.chunk import (
+    ChunkCategory,
+    ChunkScope,
+    SearchResultChunk,
+    aggregate_tech_summary,
+    format_contract_chunks,
+    resolve_contract_categories,
+)
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
 from cortex.storage.manager import StorageManager
 
@@ -75,31 +82,21 @@ class BearerAuthMiddleware(BaseHTTPMiddleware):
 
         token = raw_auth[7:].strip()
 
-        # 1. Global API key match
-        if self.api_key and token == self.api_key:
+        # 1. Global API key match (constant-time comparison)
+        if self.api_key and hmac.compare_digest(
+            self.api_key.encode("utf-8"), token.encode("utf-8")
+        ):
+            request.state.is_admin = True
             return await call_next(request)
 
-        # 2. Check tenant-specific API keys if dynamic config is available
+        # 2. Check tenant-specific API keys in a single query if dynamic config is available
         if self.dynamic_config is not None:
-            for tenant in self.dynamic_config.list_tenants():
-                t_id = str(tenant.get("tenant_id", "")).strip()
-                if not t_id:
-                    continue
-                raw_cfg = self.dynamic_config.get_raw_config(t_id)
-                if not raw_cfg:
-                    continue
-                tenant_remote = raw_cfg.get("remote")
-                t_key: str | None = None
-                if isinstance(tenant_remote, dict):
-                    raw_val = tenant_remote.get("api_key")
-                    if raw_val:
-                        t_key = str(raw_val).strip()
-                if not t_key and "api_key" in raw_cfg:
-                    t_key = str(raw_cfg["api_key"]).strip()
-
-                if t_key and t_key == token:
-                    request.state.tenant_id = t_id
-                    return await call_next(request)
+            matched_tenant = self.dynamic_config.resolve_tenant_by_api_key(token)
+            if matched_tenant:
+                request.state.tenant_id = matched_tenant
+                request.state.authenticated_tenant_id = matched_tenant
+                request.state.is_admin = False
+                return await call_next(request)
 
         return JSONResponse(
             {"error": "Unauthorized", "detail": "Invalid Bearer token"},
@@ -142,11 +139,10 @@ def create_app(
             lazy_storage = StorageManager(cfg.storage.data_dir)
         return lazy_storage
 
-    def resolve_tenant(request: Request, body: dict[str, Any] | None = None) -> str:
-        """Resolve active tenant identifier from request state, header, query, or body."""
-        if hasattr(request.state, "tenant_id") and request.state.tenant_id:
-            return str(request.state.tenant_id).strip()
-
+    def get_explicit_requested_tenant(
+        request: Request, body: dict[str, Any] | None = None
+    ) -> str | None:
+        """Extract explicitly requested tenant ID from header, query param, or JSON body."""
         header_tenant = request.headers.get("X-Tenant-ID", "").strip()
         if header_tenant:
             return header_tenant
@@ -161,6 +157,38 @@ def create_app(
             body_tenant = str(body.get("tenant_id", body.get("tenant", ""))).strip()
             if body_tenant:
                 return body_tenant
+
+        return None
+
+    def check_tenant_isolation(
+        request: Request, body: dict[str, Any] | None = None
+    ) -> JSONResponse | None:
+        """Verify that a tenant-scoped token does not access another tenant's resources."""
+        auth_tenant = getattr(request.state, "authenticated_tenant_id", None)
+        if not auth_tenant:
+            return None
+        requested = get_explicit_requested_tenant(request, body)
+        if requested and requested != auth_tenant:
+            return JSONResponse(
+                {
+                    "error": "Forbidden",
+                    "detail": (
+                        f"Tenant token for '{auth_tenant}' is not authorized "
+                        f"to access tenant '{requested}'"
+                    ),
+                },
+                status_code=403,
+            )
+        return None
+
+    def resolve_tenant(request: Request, body: dict[str, Any] | None = None) -> str:
+        """Resolve active tenant identifier from request state, header, query, or body."""
+        if hasattr(request.state, "tenant_id") and request.state.tenant_id:
+            return str(request.state.tenant_id).strip()
+
+        explicit = get_explicit_requested_tenant(request, body)
+        if explicit:
+            return explicit
 
         return "default"
 
@@ -343,47 +371,11 @@ def create_app(
         except ValueError:
             limit = 50
 
-        categories: list[str]
-        if contract_type:
-            ct = contract_type.strip().lower()
-            if ct in ("openapi", "api", "contract"):
-                categories = ["contract"]
-            elif ct in ("compose", "docker", "infra"):
-                categories = ["infra"]
-            elif ct in ("invariant", "rule", "invariants"):
-                categories = ["invariant"]
-            elif ct == "all":
-                categories = ["contract", "infra", "invariant"]
-            else:
-                categories = [ct]
-        else:
-            categories = ["contract", "infra", "invariant"]
-
+        categories = resolve_contract_categories(contract_type)
         mgr = get_storage()
         records = mgr.get_repo_contracts(repo=repo, categories=categories, limit=limit)
-
-        results: list[dict[str, Any]] = []
-        for rec in records:
-            file_path = str(rec.get("file_path", ""))
-            breadcrumb = str(rec.get("breadcrumb", ""))
-            anchor = (
-                f"[{repo}] {file_path} > {breadcrumb}" if breadcrumb else f"[{repo}] {file_path}"
-            )
-            raw_tags = rec.get("tags")
-            tags = [str(t) for t in raw_tags] if isinstance(raw_tags, Sequence) else []
-            results.append(
-                {
-                    "anchor": anchor,
-                    "repo": repo,
-                    "file_path": file_path,
-                    "category": str(rec.get("category", "contract")),
-                    "breadcrumb": breadcrumb,
-                    "tags": tags,
-                    "content": str(rec.get("content", "")),
-                }
-            )
-
-        return JSONResponse(results)
+        chunks = format_contract_chunks(repo, records)
+        return JSONResponse([c.model_dump(mode="json") for c in chunks])
 
     async def technologies_endpoint(request: Request) -> JSONResponse:
         tech_name = request.query_params.get("tech_name")
@@ -391,54 +383,23 @@ def create_app(
 
         mgr = get_storage()
         records = mgr.get_technologies(repo=repo)
-
-        repo_map: dict[str, set[str]] = defaultdict(set)
-        count_map: dict[str, int] = defaultdict(int)
-
-        filter_tech = tech_name.strip().lower() if tech_name and tech_name.strip() else None
-
-        for rec in records:
-            r_repo = str(rec.get("repo", "")).strip()
-            raw_tags = rec.get("tags")
-            if not isinstance(raw_tags, Sequence):
-                continue
-
-            for tag in raw_tags:
-                clean_tag = str(tag).strip()
-                if not clean_tag:
-                    continue
-
-                if filter_tech and filter_tech not in clean_tag.lower():
-                    continue
-
-                repo_map[clean_tag].add(r_repo)
-                count_map[clean_tag] += 1
-
-        sorted_keys = sorted(count_map.keys(), key=lambda k: (-count_map[k], k.lower()))
-        tech_items = [
-            {
-                "technology": t,
-                "repositories": sorted(repo_map[t]),
-                "chunk_count": count_map[t],
-            }
-            for t in sorted_keys
-        ]
-
-        return JSONResponse(
-            {
-                "total_technologies": len(tech_items),
-                "technologies": tech_items,
-            }
-        )
+        summary = aggregate_tech_summary(records, tech_name=tech_name)
+        return JSONResponse(summary.model_dump(mode="json"))
 
     # Dynamic Configuration Endpoints
     async def get_config_endpoint(request: Request) -> JSONResponse:
+        isolation_err = check_tenant_isolation(request)
+        if isolation_err is not None:
+            return isolation_err
         tenant_id = resolve_tenant(request)
         dyn_mgr = get_dynamic_config()
         effective_cfg = dyn_mgr.get_tenant_config(tenant_id, fallback=get_config())
         return JSONResponse(effective_cfg.model_dump(mode="json"))
 
     async def get_raw_config_endpoint(request: Request) -> JSONResponse:
+        isolation_err = check_tenant_isolation(request)
+        if isolation_err is not None:
+            return isolation_err
         tenant_id = resolve_tenant(request)
         dyn_mgr = get_dynamic_config()
         raw = dyn_mgr.get_raw_config(tenant_id)
@@ -463,6 +424,10 @@ def create_app(
                 {"error": "Bad Request", "detail": "Invalid JSON body"},
                 status_code=400,
             )
+
+        isolation_err = check_tenant_isolation(request, body)
+        if isolation_err is not None:
+            return isolation_err
 
         tenant_id = resolve_tenant(request, body)
         raw_config_data = body.get("config", body)
@@ -501,6 +466,9 @@ def create_app(
             )
 
     async def delete_config_endpoint(request: Request) -> JSONResponse:
+        isolation_err = check_tenant_isolation(request)
+        if isolation_err is not None:
+            return isolation_err
         tenant_id = resolve_tenant(request)
         dyn_mgr = get_dynamic_config()
         deleted = dyn_mgr.delete_tenant_config(tenant_id)
@@ -513,8 +481,11 @@ def create_app(
         )
 
     async def list_tenants_endpoint(request: Request) -> JSONResponse:
+        auth_tenant = getattr(request.state, "authenticated_tenant_id", None)
         dyn_mgr = get_dynamic_config()
         tenants = dyn_mgr.list_tenants()
+        if auth_tenant:
+            tenants = [t for t in tenants if str(t.get("tenant_id", "")).strip() == auth_tenant]
         return JSONResponse({"total_tenants": len(tenants), "tenants": tenants})
 
     routes = [

@@ -133,11 +133,19 @@ def resolve_sync_sources(
             if src.get_repo_name() == clean_target or str(src.path) == clean_target:
                 return [src]
 
-        # Check if clean_target is a filesystem directory and git repo
+        # Check if clean_target is a filesystem directory (git repo or parent portfolio directory)
         target_path = Path(clean_target).expanduser().resolve()
-        if target_path.is_dir() and is_git_repository(target_path):
-            git_root = get_git_root(target_path)
-            return [RepositorySourceConfig(path=git_root, name=git_root.name)]
+        if target_path.is_dir():
+            if is_git_repository(target_path):
+                git_root = get_git_root(target_path)
+                return [RepositorySourceConfig(path=git_root, name=git_root.name)]
+            discovered_in_dir = discover_repositories(
+                roots=[target_path],
+                max_depth=config.sources.auto_discover.max_depth,
+                ignore_patterns=config.sources.auto_discover.ignore_patterns,
+            )
+            if discovered_in_dir:
+                return [RepositorySourceConfig(path=p, name=p.name) for p in discovered_in_dir]
 
         # Search auto-discovered repositories if enabled
         if config.sources.auto_discover.roots:

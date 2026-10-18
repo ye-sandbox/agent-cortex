@@ -310,3 +310,40 @@ async def test_mcp_live_storage_integration(tmp_path: Path) -> None:
     assert set(tech_map["fastapi"]["repositories"]) == {"test-repo", "other-repo"}
     assert "redis" in tech_map
     assert tech_map["redis"]["repositories"] == ["test-repo"]
+
+
+@pytest.mark.anyio
+async def test_mcp_dual_mode_remote_client() -> None:
+    """Verify MCP tools delegate to CortexClient when configured in Dual-Mode."""
+    mock_client = MagicMock()
+    mock_client.search.return_value = [
+        SearchResultChunk(
+            id="remote-repo:README.md:c0",
+            repo="remote-repo",
+            file_path="README.md",
+            category=ChunkCategory.DOC,
+            lifecycle=ChunkLifecycle.ACTIVE,
+            scope=ChunkScope.INTERNAL,
+            breadcrumb="Architecture",
+            score=0.88,
+            content="Remote hub architecture overview.",
+            snippet="Remote hub architecture",
+            tags=["architecture"],
+        )
+    ]
+
+    server = create_cortex_mcp_server(client=mock_client)
+    res = await server.call_tool("cortex_search", {"query": "hub architecture", "limit": 3})
+
+    assert not res.is_error
+    mock_client.search.assert_called_once_with(
+        query="hub architecture",
+        limit=3,
+        scopes=None,
+        category=None,
+        repo=None,
+        rerank=True,
+    )
+    structured = res.structured_content
+    assert structured is not None
+    assert structured["result"][0]["repo"] == "remote-repo"

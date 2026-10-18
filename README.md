@@ -136,30 +136,42 @@ Add to your agent's MCP configuration (`antigravity.json`, `claude_desktop_confi
 ## ⚙️ Configuration (`config.yaml`)
 
 ```yaml
+profile: "balanced"                           # "high" | "balanced" | "low" | "code" | "custom"
+
+custom_profile:
+  name: "custom"
+  embedding_model: "BAAI/bge-small-en-v1.5"
+  embedding_dim: 384
+  reranker_model: "BAAI/bge-reranker-base"
+  reranker_enabled: true
+  top_k_rerank: 20
+  max_threads: 4
+
 storage:
-  mode: "local"                             # "local" | "remote"
-  path: "~/.local/share/agent-cortex/data"
-  remote:
-    endpoint: "http://homelab-mini.local:8000"
-    api_key_env: "CORTEX_API_KEY"
+  data_dir: "~/.local/share/agent-cortex/data"
 
 sources:
   auto_discover:
-    - "~/github/ye-sandbox"
+    enabled: true
+    roots:
+      - "~/github/ye-sandbox"
+    max_depth: 3
   repositories:
-    - "~/github/ye-sandbox/sentinel-deals-backend"
-    - "~/github/ye-sandbox/clipflow-backend"
+    - path: "~/github/ye-sandbox/sentinel-deals-backend"
+      default_scope: "internal"
+    - path: "~/github/ye-sandbox/clipflow-backend"
+      default_scope: "internal"
 
-models:
-  profile: "balanced"                       # "high" | "balanced" | "low" | "custom"
-  custom:
-    embedding: "BAAI/bge-small-en-v1.5"
-    reranker: "BAAI/bge-reranker-base"
+retrieval:
+  k: 60
+  weight_dense: 0.65
+  weight_sparse: 0.35
+  archived_penalty: 0.6
+  default_limit: 10
 
-indexing:
-  include_archived: false
-  archived_score_multiplier: 0.6
-  default_scope: "internal"
+remote:
+  hub_url: "http://homelab-mini.local:8000"
+  api_key: null                               # Or set via CORTEX_API_KEY env var
 ```
 
 ---

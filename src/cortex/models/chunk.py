@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+from collections import defaultdict
+from collections.abc import Sequence
 from enum import StrEnum
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -131,3 +133,158 @@ class SearchResultChunk(BaseModel):
         if self.breadcrumb:
             return f"[{self.repo}] {self.file_path} > {self.breadcrumb}"
         return f"[{self.repo}] {self.file_path}"
+
+
+class CompactSearchResult(BaseModel):
+    """Token-dense semantic search result item for AI agent consumption."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    anchor: str = Field(..., description="Compact markdown anchor: [repo] path > breadcrumb")
+    repo: str = Field(..., description="Repository name")
+    file_path: str = Field(..., description="Relative file path")
+    category: str = Field(
+        ...,
+        description="Semantic category (doc, contract, infra, invariant, solution)",
+    )
+    scope: str = Field(..., description="Access scope (internal, public, confidential)")
+    score: float = Field(..., description="Fused relevance score")
+    snippet: str = Field(..., description="Concise text snippet")
+    tags: list[str] = Field(default_factory=list, description="Associated technology tags")
+    content: str = Field(..., description="Full chunk content")
+
+
+class RepoContractChunk(BaseModel):
+    """Targeted contract or architectural invariant definition for a repository."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    anchor: str = Field(..., description="Compact markdown anchor")
+    repo: str = Field(..., description="Repository name")
+    file_path: str = Field(..., description="Contract or manifest file path")
+    category: str = Field(..., description="Semantic category (contract, infra, invariant)")
+    breadcrumb: str = Field(..., description="Operation or service hierarchy")
+    tags: list[str] = Field(default_factory=list, description="Technology and endpoint tags")
+    content: str = Field(..., description="Contract or service definition content")
+
+
+class TechUsage(BaseModel):
+    """Aggregate usage metadata for a technology across repositories."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    technology: str = Field(..., description="Normalized technology tag or framework name")
+    repositories: list[str] = Field(
+        default_factory=list,
+        description="Repositories utilizing this technology",
+    )
+    chunk_count: int = Field(
+        ...,
+        description="Total occurrences or references in indexed portfolio",
+    )
+
+
+class TechSummary(BaseModel):
+    """Portfolio technology discovery summary."""
+
+    model_config = ConfigDict(frozen=True, str_strip_whitespace=True)
+
+    total_technologies: int = Field(..., description="Total unique technologies identified")
+    technologies: list[TechUsage] = Field(
+        default_factory=list,
+        description="List of technologies with repo mappings",
+    )
+
+
+def resolve_contract_categories(contract_type: str | None) -> list[str]:
+    """Normalize a user-provided contract_type string into storage category values."""
+    if not contract_type:
+        return ["contract", "infra", "invariant"]
+    ct = contract_type.strip().lower()
+    if ct in ("openapi", "api", "contract"):
+        return ["contract"]
+    if ct in ("compose", "docker", "infra"):
+        return ["infra"]
+    if ct in ("invariant", "rule", "invariants"):
+        return ["invariant"]
+    if ct == "all":
+        return ["contract", "infra", "invariant"]
+    return [ct]
+
+
+def format_contract_chunks(
+    repo: str,
+    records: Sequence[dict[str, Any]],
+) -> list[RepoContractChunk]:
+    """Convert raw LanceDB contract records into typed RepoContractChunk models."""
+    cleaned_repo = repo.strip()
+    results: list[RepoContractChunk] = []
+    for rec in records:
+        file_path = str(rec.get("file_path", ""))
+        breadcrumb = str(rec.get("breadcrumb", ""))
+        anchor = (
+            f"[{cleaned_repo}] {file_path} > {breadcrumb}"
+            if breadcrumb
+            else f"[{cleaned_repo}] {file_path}"
+        )
+        raw_tags = rec.get("tags")
+        tags = (
+            [str(t) for t in raw_tags]
+            if isinstance(raw_tags, Sequence) and not isinstance(raw_tags, (str, bytes))
+            else []
+        )
+        results.append(
+            RepoContractChunk(
+                anchor=anchor,
+                repo=cleaned_repo,
+                file_path=file_path,
+                category=str(rec.get("category", "contract")),
+                breadcrumb=breadcrumb,
+                tags=tags,
+                content=str(rec.get("content", "")),
+            )
+        )
+    return results
+
+
+def aggregate_tech_summary(
+    records: Sequence[dict[str, Any]],
+    tech_name: str | None = None,
+) -> TechSummary:
+    """Aggregate technology tags and repository associations from raw LanceDB records."""
+    repo_map: dict[str, set[str]] = defaultdict(set)
+    count_map: dict[str, int] = defaultdict(int)
+
+    filter_tech = tech_name.strip().lower() if tech_name and tech_name.strip() else None
+
+    for rec in records:
+        r_repo = str(rec.get("repo", "")).strip()
+        raw_tags = rec.get("tags")
+        if not isinstance(raw_tags, Sequence) or isinstance(raw_tags, (str, bytes)):
+            continue
+
+        for tag in raw_tags:
+            clean_tag = str(tag).strip()
+            if not clean_tag:
+                continue
+
+            if filter_tech and filter_tech not in clean_tag.lower():
+                continue
+
+            repo_map[clean_tag].add(r_repo)
+            count_map[clean_tag] += 1
+
+    sorted_keys = sorted(count_map.keys(), key=lambda k: (-count_map[k], k.lower()))
+    tech_items = [
+        TechUsage(
+            technology=t,
+            repositories=sorted(repo_map[t]),
+            chunk_count=count_map[t],
+        )
+        for t in sorted_keys
+    ]
+
+    return TechSummary(
+        total_technologies=len(tech_items),
+        technologies=tech_items,
+    )

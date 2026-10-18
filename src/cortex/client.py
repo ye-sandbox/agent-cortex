@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections import defaultdict
 from collections.abc import Iterator, Sequence
 from typing import Any, Literal
 
@@ -17,8 +16,16 @@ import httpx
 
 from cortex.config.dynamic import DynamicConfigManager
 from cortex.config.loader import CortexConfig, load_config
-from cortex.mcp_server import RepoContractChunk, TechSummary, TechUsage
-from cortex.models.chunk import ChunkCategory, ChunkScope, SearchResultChunk
+from cortex.models.chunk import (
+    ChunkCategory,
+    ChunkScope,
+    RepoContractChunk,
+    SearchResultChunk,
+    TechSummary,
+    aggregate_tech_summary,
+    format_contract_chunks,
+    resolve_contract_categories,
+)
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
 from cortex.storage.manager import StorageManager
 
@@ -444,52 +451,14 @@ class CortexClient:
                 ) from exc
 
         # Local execution
-        categories: list[str]
-        if contract_type:
-            ct = contract_type.strip().lower()
-            if ct in ("openapi", "api", "contract"):
-                categories = ["contract"]
-            elif ct in ("compose", "docker", "infra"):
-                categories = ["infra"]
-            elif ct in ("invariant", "rule", "invariants"):
-                categories = ["invariant"]
-            elif ct == "all":
-                categories = ["contract", "infra", "invariant"]
-            else:
-                categories = [ct]
-        else:
-            categories = ["contract", "infra", "invariant"]
-
+        categories = resolve_contract_categories(contract_type)
         mgr = self._get_storage()
         records = mgr.get_repo_contracts(
             repo=cleaned_repo,
             categories=categories,
             limit=limit,
         )
-
-        results: list[RepoContractChunk] = []
-        for rec in records:
-            file_path = str(rec.get("file_path", ""))
-            breadcrumb = str(rec.get("breadcrumb", ""))
-            anchor = (
-                f"[{cleaned_repo}] {file_path} > {breadcrumb}"
-                if breadcrumb
-                else f"[{cleaned_repo}] {file_path}"
-            )
-            raw_tags = rec.get("tags")
-            tags = [str(t) for t in raw_tags] if isinstance(raw_tags, Sequence) else []
-            results.append(
-                RepoContractChunk(
-                    anchor=anchor,
-                    repo=cleaned_repo,
-                    file_path=file_path,
-                    category=str(rec.get("category", "contract")),
-                    breadcrumb=breadcrumb,
-                    tags=tags,
-                    content=str(rec.get("content", "")),
-                )
-            )
-        return results
+        return format_contract_chunks(cleaned_repo, records)
 
     def list_technologies(
         self,
@@ -524,45 +493,7 @@ class CortexClient:
         # Local execution
         mgr = self._get_storage()
         records = mgr.get_technologies(repo=repo)
-
-        repo_map: dict[str, set[str]] = defaultdict(set)
-        count_map: dict[str, int] = defaultdict(int)
-
-        filter_tech = tech_name.strip().lower() if tech_name and tech_name.strip() else None
-
-        for rec in records:
-            r_repo = str(rec.get("repo", "")).strip()
-            raw_tags = rec.get("tags")
-            if not isinstance(raw_tags, Sequence):
-                continue
-
-            for tag in raw_tags:
-                clean_tag = str(tag).strip()
-                if not clean_tag:
-                    continue
-
-                if filter_tech and filter_tech not in clean_tag.lower():
-                    continue
-
-                repo_map[clean_tag].add(r_repo)
-                count_map[clean_tag] += 1
-
-        tech_items: list[TechUsage] = []
-        sorted_keys = sorted(count_map.keys(), key=lambda k: (-count_map[k], k.lower()))
-
-        for t in sorted_keys:
-            tech_items.append(
-                TechUsage(
-                    technology=t,
-                    repositories=sorted(repo_map[t]),
-                    chunk_count=count_map[t],
-                )
-            )
-
-        return TechSummary(
-            total_technologies=len(tech_items),
-            technologies=tech_items,
-        )
+        return aggregate_tech_summary(records, tech_name=tech_name)
 
     def _build_search_payload(
         self,

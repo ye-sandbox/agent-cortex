@@ -120,14 +120,48 @@ class StorageManager:
         res = self._db.list_tables()
         return list(res.tables)
 
+    @staticmethod
+    def _get_table_vector_dim(tbl: Table) -> int | None:
+        """Inspect Arrow schema of a LanceDB table and return vector list dimension."""
+        try:
+            schema = tbl.schema
+            field = schema.field("vector")
+            list_size = getattr(field.type, "list_size", None)
+            if isinstance(list_size, int) and list_size > 0:
+                return list_size
+        except Exception:  # noqa: BLE001
+            pass
+        return None
+
     def get_or_create_table(
         self,
         name: str = "chunks",
         dim: int = 384,
+        recreate_on_dim_mismatch: bool = False,
     ) -> Table:
         """Retrieve existing table or create a new one matching DocumentChunk schema."""
         if name in self.table_names():
-            return self._db.open_table(name)
+            tbl = self._db.open_table(name)
+            existing_dim = self._get_table_vector_dim(tbl)
+            if existing_dim is not None and existing_dim != dim:
+                if recreate_on_dim_mismatch:
+                    logger.info(
+                        "Recreating table '%s' due to vector dimension change (%d -> %d)",
+                        name,
+                        existing_dim,
+                        dim,
+                    )
+                    self._db.drop_table(name)
+                else:
+                    msg = (
+                        f"Vector dimension mismatch on table '{name}': "
+                        f"existing table has dim={existing_dim}, "
+                        f"but active profile requires dim={dim}. "
+                        "Run 'cortex sync --force-full' to rebuild the table for the new profile."
+                    )
+                    raise ValueError(msg)
+            else:
+                return tbl
 
         model_cls = create_chunk_record_model(dim)
         return self._db.create_table(name, schema=model_cls)
@@ -138,6 +172,7 @@ class StorageManager:
         table_name: str = "chunks",
         dim: int = 384,
         create_fts: bool = True,
+        recreate_on_dim_mismatch: bool = False,
     ) -> int:
         """Upsert document chunks into LanceDB table using deterministic IDs."""
         if not chunks:
@@ -147,7 +182,11 @@ class StorageManager:
         first_vec = chunks[0].vector
         actual_dim = len(first_vec) if first_vec is not None else dim
 
-        tbl = self.get_or_create_table(name=table_name, dim=actual_dim)
+        tbl = self.get_or_create_table(
+            name=table_name,
+            dim=actual_dim,
+            recreate_on_dim_mismatch=recreate_on_dim_mismatch,
+        )
 
         records = [chunk_to_record_dict(c) for c in chunks]
 
@@ -258,6 +297,15 @@ class StorageManager:
         if table_name not in self.table_names():
             return []
         tbl = self._db.open_table(table_name)
+        existing_dim = self._get_table_vector_dim(tbl)
+        q_dim = len(query_vector)
+        if existing_dim is not None and existing_dim != q_dim:
+            msg = (
+                f"Vector dimension mismatch on table '{table_name}': "
+                f"existing table has dim={existing_dim}, but query vector has dim={q_dim}. "
+                "Run 'cortex sync --force-full' to rebuild the table for the active profile."
+            )
+            raise ValueError(msg)
         builder = tbl.search(list(query_vector)).limit(limit)
         if where:
             builder = builder.where(where)

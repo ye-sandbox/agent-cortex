@@ -194,16 +194,18 @@ class IngestionEngine:
                         table_name=table_name,
                         dim=dim,
                         create_fts=False,
+                        recreate_on_dim_mismatch=(force_full and i == 0),
                     )
             except Exception as exc:
                 msg = f"Failed to embed and upsert chunks for repo '{name}': {exc}"
                 logger.exception(msg)
                 errors.append(msg)
 
-        # Defer FTS index rebuild until sync cycle completion
+        # Defer FTS and vector index rebuild until sync cycle completion
         total_changed = added_count + updated_count + deleted_count
         if not defer_fts and total_changed > 0:
             self.storage.create_fts_index(table_name=table_name)
+            self.storage.create_vector_index(table_name=table_name)
 
         # 6. Update state manifest
         safe_name = name.replace("'", "''")
@@ -265,5 +267,6 @@ class IngestionEngine:
 
         if defer_fts and any_changes:
             self.storage.create_fts_index(table_name=table_name)
+            self.storage.create_vector_index(table_name=table_name)
 
         return results

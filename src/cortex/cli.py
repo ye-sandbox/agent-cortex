@@ -216,6 +216,12 @@ def bootstrap(
 
 @app.command()
 def sync(
+    target: Annotated[
+        str | None,
+        typer.Argument(
+            help="Optional repository name, path, or portfolio directory to synchronize.",
+        ),
+    ] = None,
     repo: Annotated[
         str | None,
         typer.Option(
@@ -251,18 +257,19 @@ def sync(
 ) -> None:
     """Synchronize git repositories into LanceDB vector storage incrementally."""
     cfg = load_config(config_path)
-    sources = resolve_sync_sources(config=cfg, repo_filter=repo, all_flag=all_repos)
+    effective_repo = repo or target
+    sources = resolve_sync_sources(config=cfg, repo_filter=effective_repo, all_flag=all_repos)
 
     if not sources:
-        if repo:
+        if effective_repo:
             console.print(
-                f"[bold red]Error:[/bold red] Repository '{repo}' not found "
+                f"[bold red]Error:[/bold red] Repository '{effective_repo}' not found "
                 "in configuration or on filesystem."
             )
         else:
             console.print("[yellow]No repositories configured or discovered for sync.[/yellow]")
             console.print(
-                "Run 'cortex sync --repo <path_or_name>' or configure repositories in config.yaml."
+                "Run 'cortex sync <path_or_name>' or configure repositories in config.yaml."
             )
         raise typer.Exit(code=1)
 
