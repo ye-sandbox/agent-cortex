@@ -33,6 +33,7 @@ Thumbs.db
 .idea/
 .vscode/
 .agent/scratch/
+.agent/.cache/
 .gemini/
 .claude/
 .maestri/

@@ -57,17 +57,21 @@ Runtime configuration can be persisted and managed dynamically without daemon re
 - **Tenant Identification:** Remote hub daemon resolves tenant via `X-Tenant-ID` header, query parameter `?tenant_id=...`, POST body `"tenant_id": "..."`, or tenant-specific Bearer token mapped from `remote.api_key`. Defaults to `"default"` tenant if unspecified.
 - **Dynamic Caching:** Retrieval pipelines are cached per configuration profile and weights to ensure zero redundant FastEmbed model initializations.
 
+### 5. System & Retrieval Invariants
+
+- **File URI Portability:** Always normalize file paths into standard `file://` URLs compatible with Linux native and WSL2/Windows.
+- **Archived Tasks vs. Repositories:** `ARCHIVE.md` files store active historic knowledge; they MUST NOT trigger repo-level exclusion. Only explicit repository deprecation flags a repo as archived.
+- **Token Efficiency:** MCP and CLI outputs presented to LLMs use compact markdown anchors (`[repo] path > breadcrumb`) and omit verbose metadata (commit SHA, raw UUIDs) to conserve context tokens.
+
 ---
 
 ## Gotchas & Pitfalls
 
-- **FastEmbed ONNX CPU Threads:** On multi-core CPUs, limit ONNX thread contention when invoked from within agent subshells (`OMP_NUM_THREADS=4`).
-- **File URI Portability:** Always normalize file paths into standard `file://` URLs that work across both Linux native and WSL2/Windows environments.
-- **Git Diff Renames:** Detect `R` (Rename) in `git diff --name-status` to avoid orphan records; delete the old path and upsert the new path.
-- **Git Worktrees & Submodules:** Bypass secondary worktrees via `git rev-parse --git-common-dir` and ignore submodules during parent repository indexing to prevent duplicate vectors.
-- **Archived Tasks vs. Archived Repos:** `ARCHIVE.md` files store valuable historic releases and active foundations; they MUST NOT trigger repo-level exclusion. Only explicit repository deprecation (`.cortexignore` or GitHub `isArchived`) flags an entire repo as archived.
-- **Token Efficiency Invariant:** MCP and CLI search outputs presented to LLMs use compact markdown anchors (`[repo] path > breadcrumb`) and omit verbose metadata (commit SHA, UUIDs) to preserve context tokens.
-- **Model Download Pre-flight:** Always prompt or rely on `cortex bootstrap` / `cortex models download` to cache weights; avoid unannounced multi-gigabyte downloads during CLI searches.
+Runtime platform bugs, library gotchas, and approved workarounds are captured as atomic cards in [`.agent/knowledge/`](knowledge/) to prevent default context bloat. Search cards via `grep` or `find_by_name` using `tags` and `symptoms` when troubleshooting:
+- [`k-001`](knowledge/k-001-fastembed-onnx-thread-contention.md): FastEmbed ONNX thread contention (`OMP_NUM_THREADS=4`).
+- [`k-002`](knowledge/k-002-git-diff-rename-orphan-vectors.md): Git diff `R` rename handling to prevent orphan vectors.
+- [`k-003`](knowledge/k-003-git-worktree-submodule-duplicate-index.md): Secondary git worktree and submodule deduplication.
+- [`k-004`](knowledge/k-004-model-weights-preflight-download.md): Pre-flight cache validation for ONNX model weights.
 
 ---
 
