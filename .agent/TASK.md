@@ -9,7 +9,7 @@
 
 - **Task ID:** `[02.1]`
 - **Title:** Automated continuous background sync service (daemonized watcher)
-- **Status:** `PLANNING`
+- **Status:** `READY FOR PLANNING`
 - **Driver:** Provide periodic / file-watcher background synchronization for configured portfolio repositories.
 
 ---
@@ -27,6 +27,7 @@
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
 | [90.4] | Vector Dimension Guard & Automatic Vector Indexing on Sync | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.5] | Multi-Tenant HTTP Daemon Hardening (Constant-Time Auth & Isolation) | `9f71111`, `8e2357e` | 2026-10-17 |
+| [90.6] | Upstream Template Synchronization & Knowledge Base Architecture | `f7e1a79` | 2026-10-17 |
 
 ---
 
