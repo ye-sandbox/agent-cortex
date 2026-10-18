@@ -14,6 +14,10 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 
+from cortex.benchmarks.evaluation import (
+    generate_synthetic_evaluation_dataset,
+    run_retrieval_evaluation,
+)
 from cortex.benchmarks.latency import (
     generate_synthetic_benchmark_dataset,
     run_latency_benchmark,
@@ -1069,6 +1073,25 @@ def benchmark(
             help="Number of query benchmark iterations.",
         ),
     ] = 5,
+    quality: Annotated[
+        bool,
+        typer.Option(
+            "--quality/--no-quality",
+            "--eval/--no-eval",
+            help=(
+                "Run IR retrieval & reranking quality evaluation "
+                "(HitRate@K, Recall@K, MRR@K, nDCG@K)."
+            ),
+        ),
+    ] = False,
+    k: Annotated[
+        int,
+        typer.Option(
+            "--k",
+            "-k",
+            help="Cutoff K for IR quality metrics (HitRate@K, Recall@K, MRR@K, nDCG@K).",
+        ),
+    ] = 5,
     synthetic: Annotated[
         bool,
         typer.Option(
@@ -1129,9 +1152,90 @@ def benchmark(
         ),
     ] = None,
 ) -> None:
-    """Benchmark Stage 1 and Stage 2 retrieval latencies across portfolio knowledge."""
+    """Benchmark Stage 1 and Stage 2 retrieval latencies and IR quality."""
     cfg = load_config(config_path)
     prof_name = profile or cfg.profile.value
+
+    if quality:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            temp_path = Path(tmpdir)
+            temp_cfg = cfg.model_copy(
+                update={
+                    "profile": HardwareProfileName(prof_name),
+                    "storage": cfg.storage.model_copy(update={"data_dir": temp_path}),
+                }
+            )
+            pipeline = HybridRetrievalPipeline.from_config(
+                temp_cfg, profile_override=prof_name, table_name=table
+            )
+            if not json_output:
+                total_syn = synthetic_repos * synthetic_chunks
+                console.print(
+                    f"[dim]Generating synthetic evaluation dataset "
+                    f"({total_syn} chunks across {synthetic_repos} repos)...[/dim]"
+                )
+            chunks, eval_queries = generate_synthetic_evaluation_dataset(
+                num_repos=synthetic_repos,
+                chunks_per_repo=synthetic_chunks,
+                dim=pipeline.embeddings.profile.embedding_dim,
+                embedding_engine=pipeline.embeddings,
+            )
+            pipeline.storage.upsert_chunks(
+                chunks, table_name=table, dim=pipeline.embeddings.profile.embedding_dim
+            )
+            eval_report = run_retrieval_evaluation(
+                pipeline=pipeline,
+                eval_queries=eval_queries,
+                k=k,
+                rerank=rerank,
+            )
+
+        if json_output:
+            typer.echo(eval_report.model_dump_json(indent=2))
+            return
+
+        eval_vitals = (
+            f"[bold]Active Profile:[/bold] [cyan]{eval_report.profile}[/cyan]\n"
+            f"[bold]Indexed Chunks:[/bold] {eval_report.total_chunks}\n"
+            f"[bold]Ground-Truth Queries:[/bold] {eval_report.queries_evaluated} "
+            f"(Cutoff K={eval_report.k})\n"
+            f"[bold]Rerank Lift:[/bold] ΔMRR@{eval_report.k}={eval_report.rerank_mrr_lift:+.4f}, "
+            f"ΔnDCG@{eval_report.k}={eval_report.rerank_ndcg_lift:+.4f}"
+        )
+        console.print(
+            Panel(eval_vitals, title="IR Quality Evaluation Summary", border_style="cyan")
+        )
+
+        qual_table = Table(
+            title=f"Retrieval & Reranking Quality (@K={eval_report.k})", show_header=True
+        )
+        qual_table.add_column("Stage", style="bold cyan")
+        qual_table.add_column(f"HitRate@{eval_report.k}", justify="right")
+        qual_table.add_column(f"Recall@{eval_report.k}", justify="right")
+        qual_table.add_column(f"MRR@{eval_report.k}", justify="right", style="green")
+        qual_table.add_column(f"nDCG@{eval_report.k}", justify="right", style="yellow")
+        qual_table.add_column("Mean Latency", justify="right")
+
+        eval_stages = [
+            ("Stage 1: Vector Search", eval_report.stage1_vector),
+            ("Stage 1: Sparse FTS Search", eval_report.stage1_fts),
+            ("Stage 1: Hybrid Fusion (RRF)", eval_report.stage1_hybrid),
+        ]
+        if eval_report.stage2_reranked is not None:
+            eval_stages.append(("Stage 2: Cross-Encoder Rerank", eval_report.stage2_reranked))
+
+        for label, m in eval_stages:
+            qual_table.add_row(
+                label,
+                f"{m.hit_rate_at_k:.4f}",
+                f"{m.recall_at_k:.4f}",
+                f"{m.mrr_at_k:.4f}",
+                f"{m.ndcg_at_k:.4f}",
+                f"{m.mean_latency_ms:.1f}ms",
+            )
+
+        console.print(qual_table)
+        return
 
     if synthetic:
         with tempfile.TemporaryDirectory() as tmpdir:

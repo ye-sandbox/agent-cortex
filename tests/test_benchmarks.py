@@ -1,17 +1,33 @@
 """Unit tests for the latency benchmarking suite and synthetic dataset generation."""
 
+import json
+from collections.abc import Sequence
 from tempfile import TemporaryDirectory
 
+import pytest
+from typer.testing import CliRunner
+
+from cortex.benchmarks.evaluation import (
+    generate_synthetic_evaluation_dataset,
+    hit_rate_at_k,
+    mrr_at_k,
+    ndcg_at_k,
+    recall_at_k,
+    run_retrieval_evaluation,
+)
 from cortex.benchmarks.ingestion import run_sync_throughput_benchmark
 from cortex.benchmarks.latency import (
     calculate_latency_stats,
     generate_synthetic_benchmark_dataset,
     run_latency_benchmark,
 )
+from cortex.cli import app
 from cortex.config.loader import CortexConfig
+from cortex.embeddings.engine import EmbeddingEngine
 from cortex.models.chunk import ChunkCategory, DocumentChunk
-from cortex.models.profile import HardwareProfileName
+from cortex.models.profile import HardwareProfileName, resolve_hardware_profile
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
+from cortex.retrieval.reranker import RerankerEngine
 from cortex.storage.manager import StorageManager
 
 
@@ -119,3 +135,129 @@ def test_run_sync_throughput_benchmark() -> None:
     assert report.per_batch_throughput_chunks_per_sec > 0.0
     assert report.deferred_throughput_chunks_per_sec > 0.0
     assert report.speedup_factor > 0.0
+
+
+def test_ir_quality_metrics_primitives() -> None:
+    """Verify HitRate@K, Recall@K, MRR@K, and nDCG@K mathematical invariants."""
+    retrieved = ["doc_a", "doc_b", "doc_c", "doc_d", "doc_e"]
+    relevant = ["doc_b", "doc_e"]
+
+    assert hit_rate_at_k(retrieved, relevant, k=1) == 0.0
+    assert hit_rate_at_k(retrieved, relevant, k=2) == 1.0
+    assert hit_rate_at_k([], relevant, k=5) == 0.0
+    assert hit_rate_at_k(retrieved, [], k=5) == 0.0
+    assert hit_rate_at_k(retrieved, relevant, k=0) == 0.0
+
+    assert recall_at_k(retrieved, relevant, k=1) == 0.0
+    assert recall_at_k(retrieved, relevant, k=2) == 0.5
+    assert recall_at_k(retrieved, relevant, k=5) == 1.0
+
+    # First relevant hit is at rank 2 -> RR = 1/2 = 0.5
+    assert mrr_at_k(retrieved, relevant, k=1) == 0.0
+    assert mrr_at_k(retrieved, relevant, k=2) == 0.5
+    assert mrr_at_k(retrieved, relevant, k=5) == 0.5
+
+    # Perfect ranking should yield nDCG = 1.0
+    assert ndcg_at_k(["doc_b", "doc_e", "doc_a"], relevant, k=3) == pytest.approx(1.0)
+    assert 0.0 < ndcg_at_k(retrieved, relevant, k=5) < 1.0
+    assert ndcg_at_k(retrieved, ["non_existent"], k=5) == 0.0
+
+
+def test_run_retrieval_evaluation_with_reranker_lift() -> None:
+    """Verify Stage 1 and Stage 2 retrieval evaluation report and reranker lift calculation."""
+    with TemporaryDirectory() as tmpdir:
+        storage = StorageManager(data_dir=tmpdir)
+        profile = resolve_hardware_profile(HardwareProfileName.BALANCED)
+
+        def mock_passage_embed(texts: Sequence[str]) -> list[list[float]]:
+            vecs: list[list[float]] = []
+            for t in texts:
+                val = 0.9 if "jwt" in t.lower() else 0.1
+                vecs.append([val] * 8)
+            return vecs
+
+        def mock_query_embed(q: str) -> list[float]:
+            val = 0.9 if "jwt" in q.lower() else 0.1
+            return [val] * 8
+
+        def mock_rerank(query: str, passages: Sequence[str]) -> list[float]:
+            scores: list[float] = []
+            q_terms = set(query.lower().split())
+            for p in passages:
+                p_lower = p.lower()
+                overlap = sum(1.0 for term in q_terms if term in p_lower)
+                scores.append(overlap)
+            return scores
+
+        custom_profile = profile.model_copy(update={"embedding_dim": 8, "top_k_rerank": 10})
+        embeddings = EmbeddingEngine(
+            profile=custom_profile,
+            passage_embed_fn=mock_passage_embed,
+            query_embed_fn=mock_query_embed,
+        )
+        reranker = RerankerEngine(profile=custom_profile, rerank_fn=mock_rerank)
+        pipeline = HybridRetrievalPipeline(
+            storage=storage,
+            embeddings=embeddings,
+            reranker=reranker,
+        )
+
+        chunks, eval_queries = generate_synthetic_evaluation_dataset(
+            num_repos=2,
+            chunks_per_repo=5,
+            dim=8,
+            embedding_engine=embeddings,
+        )
+        storage.upsert_chunks(chunks, table_name="chunks", dim=8)
+
+        report = run_retrieval_evaluation(
+            pipeline=pipeline,
+            eval_queries=eval_queries,
+            k=5,
+            rerank=True,
+        )
+
+        assert report.profile == "balanced"
+        assert report.k == 5
+        assert report.total_chunks == 10
+        assert report.queries_evaluated == len(eval_queries)
+        assert report.stage1_vector.queries_evaluated == len(eval_queries)
+        assert report.stage1_fts.queries_evaluated == len(eval_queries)
+        assert report.stage1_hybrid.queries_evaluated == len(eval_queries)
+        assert report.stage2_reranked is not None
+        assert report.stage2_reranked.hit_rate_at_k > 0.0
+        assert report.stage2_reranked.ndcg_at_k > 0.0
+
+        with pytest.raises(ValueError, match="Evaluation cutoff k must be greater than 0"):
+            run_retrieval_evaluation(pipeline=pipeline, eval_queries=eval_queries, k=0)
+
+
+def test_cli_benchmark_quality_json() -> None:
+    """Verify 'cortex benchmark --quality --json' executes and returns valid JSON metrics."""
+    runner = CliRunner()
+    res = runner.invoke(
+        app,
+        [
+            "benchmark",
+            "--quality",
+            "--profile",
+            "low",
+            "--synthetic-repos",
+            "2",
+            "--synthetic-chunks",
+            "5",
+            "--k",
+            "3",
+            "--json",
+        ],
+    )
+    assert res.exit_code == 0, res.output
+    payload = json.loads(res.output)
+    assert payload["profile"] == "low"
+    assert payload["k"] == 3
+    assert payload["total_chunks"] == 10
+    assert payload["queries_evaluated"] > 0
+    assert "stage1_vector" in payload
+    assert "stage1_fts" in payload
+    assert "stage1_hybrid" in payload
+    assert payload["stage1_hybrid"]["hit_rate_at_k"] >= 0.0
