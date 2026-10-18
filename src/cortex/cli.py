@@ -299,8 +299,9 @@ def sync(
                 any_changes = True
 
         if defer_fts and any_changes:
-            status_bar.update("Building full-text search index...")
+            status_bar.update("Building full-text and vector search indices...")
             engine.storage.create_fts_index()
+            engine.storage.create_vector_index()
 
     table = Table(title="Repository Synchronization Summary", show_header=True)
     table.add_column("Repository", style="bold cyan", no_wrap=True)

@@ -253,6 +253,10 @@ def create_app(
                     status_code=400,
                 )
 
+        isolation_err = check_tenant_isolation(request, body)
+        if isolation_err is not None:
+            return isolation_err
+
         # Resolve tenant & tenant-specific configuration
         tenant_id = resolve_tenant(request, body)
         dyn_mgr = get_dynamic_config()

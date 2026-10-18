@@ -315,6 +315,8 @@ async def test_mcp_live_storage_integration(tmp_path: Path) -> None:
 @pytest.mark.anyio
 async def test_mcp_dual_mode_remote_client() -> None:
     """Verify MCP tools delegate to CortexClient when configured in Dual-Mode."""
+    from cortex.models.chunk import RepoContractChunk, TechSummary, TechUsage
+
     mock_client = MagicMock()
     mock_client.search.return_value = [
         SearchResultChunk(
@@ -331,10 +333,32 @@ async def test_mcp_dual_mode_remote_client() -> None:
             tags=["architecture"],
         )
     ]
+    mock_client.get_repo_contracts.return_value = [
+        RepoContractChunk(
+            anchor="[remote-repo] specs/openapi.json > GET /status",
+            repo="remote-repo",
+            file_path="specs/openapi.json",
+            category="contract",
+            breadcrumb="GET /status",
+            tags=["GET", "status"],
+            content="### GET /status\nHealth status.",
+        )
+    ]
+    mock_client.list_technologies.return_value = TechSummary(
+        total_technologies=1,
+        technologies=[
+            TechUsage(
+                technology="fastapi",
+                repositories=["remote-repo"],
+                chunk_count=3,
+            )
+        ],
+    )
 
     server = create_cortex_mcp_server(client=mock_client)
-    res = await server.call_tool("cortex_search", {"query": "hub architecture", "limit": 3})
 
+    # 1. cortex_search
+    res = await server.call_tool("cortex_search", {"query": "hub architecture", "limit": 3})
     assert not res.is_error
     mock_client.search.assert_called_once_with(
         query="hub architecture",
@@ -347,3 +371,35 @@ async def test_mcp_dual_mode_remote_client() -> None:
     structured = res.structured_content
     assert structured is not None
     assert structured["result"][0]["repo"] == "remote-repo"
+
+    # 2. cortex_get_repo_contracts
+    res_contracts = await server.call_tool(
+        "cortex_get_repo_contracts",
+        {"repo": "remote-repo", "contract_type": "openapi", "limit": 10},
+    )
+    assert not res_contracts.is_error
+    mock_client.get_repo_contracts.assert_called_once_with(
+        repo="remote-repo",
+        contract_type="openapi",
+        limit=10,
+    )
+    structured_contracts = res_contracts.structured_content
+    assert structured_contracts is not None
+    assert structured_contracts["result"][0]["anchor"] == (
+        "[remote-repo] specs/openapi.json > GET /status"
+    )
+
+    # 3. cortex_list_technologies
+    res_tech = await server.call_tool(
+        "cortex_list_technologies",
+        {"tech_name": "fastapi", "repo": "remote-repo"},
+    )
+    assert not res_tech.is_error
+    mock_client.list_technologies.assert_called_once_with(
+        tech_name="fastapi",
+        repo="remote-repo",
+    )
+    structured_tech = res_tech.structured_content
+    assert structured_tech is not None
+    assert structured_tech["total_technologies"] == 1
+    assert structured_tech["technologies"][0]["technology"] == "fastapi"

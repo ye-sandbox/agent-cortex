@@ -224,7 +224,18 @@ def test_server_tenant_bearer_token_authentication(tmp_path: Path) -> None:
     )
     assert resp.status_code == 403
 
-    # 6. Tenant token calling /tenants only sees its own tenant record
+    # 6. Tenant token attempting /search with another tenant gets 403 Forbidden
+    resp = client.post(
+        "/search",
+        headers={
+            "Authorization": "Bearer secret-token-123",
+            "X-Tenant-ID": "other-tenant",
+        },
+        json={"query": "test"},
+    )
+    assert resp.status_code == 403
+
+    # 7. Tenant token calling /tenants only sees its own tenant record
     dyn_mgr.set_tenant_config("other-tenant", {"profile": "low"})
     resp = client.get("/tenants", headers={"Authorization": "Bearer secret-token-123"})
     assert resp.status_code == 200
