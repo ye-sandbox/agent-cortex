@@ -23,6 +23,10 @@ from cortex.models.graph import (
     DependentsQueryResult,
     SignaturesQueryResult,
 )
+from cortex.models.impact import (
+    BlastRadiusSimulationReport,
+    ImpactTraceResult,
+)
 from cortex.models.topology import (
     PortfolioDependencyMatrix,
     PortfolioTopologyGraph,
@@ -445,6 +449,82 @@ def create_cortex_mcp_server(
 
         client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
         return client.get_dependency_matrix(min_weight=min_weight)
+
+    @server.tool(
+        name="cortex_simulate_blast_radius",
+        description=(
+            "Simulate cross-repository change blast radius, evaluate architectural risk score, "
+            "trace transitive caller chains, and synthesize AI agent planning advisories."
+        ),
+    )
+    def cortex_simulate_blast_radius(
+        repo: str,
+        symbol: str | None = None,
+        file_path: str | None = None,
+        change_kind: str = "MODIFIED",
+        max_depth: int = 5,
+    ) -> BlastRadiusSimulationReport:
+        """Simulate change blast radius and synthesize AI agent planning advisories."""
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            return remote_client.simulate_blast_radius(
+                repo=repo,
+                symbol=symbol,
+                file_path=file_path,
+                change_kind=change_kind,
+                max_depth=max_depth,
+            )
+
+        client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+        return client.simulate_blast_radius(
+            repo=repo,
+            symbol=symbol,
+            file_path=file_path,
+            change_kind=change_kind,
+            max_depth=max_depth,
+        )
+
+    @server.tool(
+        name="cortex_trace_impact",
+        description=(
+            "Trace incoming transitive caller chains, impacted components, and circular "
+            "dependency loops across portfolio repositories."
+        ),
+    )
+    def cortex_trace_impact(
+        repo: str,
+        symbol: str | None = None,
+        file_path: str | None = None,
+        max_depth: int = 5,
+    ) -> ImpactTraceResult:
+        """Trace incoming transitive caller chains and cycle paths."""
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            chains, nodes, cycles = remote_client.trace_impact(
+                repo=repo,
+                symbol=symbol,
+                file_path=file_path,
+                max_depth=max_depth,
+            )
+        else:
+            client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+            chains, nodes, cycles = client.trace_impact(
+                repo=repo,
+                symbol=symbol,
+                file_path=file_path,
+                max_depth=max_depth,
+            )
+
+        return ImpactTraceResult(
+            target_repo=repo,
+            symbol=symbol,
+            file_path=file_path,
+            total_chains=len(chains),
+            caller_chains=chains,
+            total_impacted_nodes=len(nodes),
+            impacted_nodes=nodes,
+            cycles_detected=cycles,
+        )
 
     return server
 

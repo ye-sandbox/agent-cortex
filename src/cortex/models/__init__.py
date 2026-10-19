@@ -30,6 +30,16 @@ from cortex.models.graph import (
     DependentsQueryResult,
     SignaturesQueryResult,
 )
+from cortex.models.impact import (
+    BlastRadiusSeverity,
+    BlastRadiusSimulationReport,
+    BlastRadiusSimulationRequest,
+    CallerChain,
+    CallerChainHop,
+    ImpactAdvisory,
+    ImpactedNode,
+    ImpactTraceResult,
+)
 from cortex.models.profile import (
     PREDEFINED_PROFILES,
     HardwareProfile,
@@ -47,6 +57,11 @@ from cortex.models.topology import (
 )
 
 __all__ = [
+    "BlastRadiusSeverity",
+    "BlastRadiusSimulationReport",
+    "BlastRadiusSimulationRequest",
+    "CallerChain",
+    "CallerChainHop",
     "ChangeKind",
     "ChunkCategory",
     "ChunkLifecycle",
@@ -66,6 +81,9 @@ __all__ = [
     "DriftSeverity",
     "HardwareProfile",
     "HardwareProfileName",
+    "ImpactAdvisory",
+    "ImpactTraceResult",
+    "ImpactedNode",
     "PREDEFINED_PROFILES",
     "PortfolioDependencyEdge",
     "PortfolioDependencyMatrix",

@@ -7,6 +7,7 @@ import typer
 from cortex.cli.commands.config import config_app
 from cortex.cli.commands.deps import deps_app
 from cortex.cli.commands.drift import drift_app
+from cortex.cli.commands.impact import impact_app
 from cortex.cli.commands.models import models_app
 from cortex.cli.commands.root import (
     app_clean_orphans,
@@ -41,6 +42,7 @@ __all__ = [
     "deps_app",
     "download_profile_models",
     "drift_app",
+    "impact_app",
     "main",
     "models_app",
     "storage_app",
@@ -59,6 +61,7 @@ app.add_typer(storage_app, name="storage")
 app.add_typer(config_app, name="config")
 app.add_typer(deps_app, name="deps")
 app.add_typer(drift_app, name="drift")
+app.add_typer(impact_app, name="impact")
 app.add_typer(topology_app, name="topology")
 
 

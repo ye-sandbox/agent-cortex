@@ -101,6 +101,31 @@ Runtime configuration can be persisted and managed dynamically without daemon re
   - MCP: `cortex_get_portfolio_topology(format, direction, min_weight)`, `cortex_get_dependency_matrix(min_weight)`.
   - HTTP Server & Client: `GET /topology/graph`, `GET /topology/matrix`, `GET /topology/cycles`, and `CortexClient` methods.
 
+### 8. Transitive Blast-Radius Simulation & Impact Tracing Contracts
+
+- **Transitive Caller Traversal:**
+  - Multi-hop BFS traversal from target repository, file, or symbol through incoming dependencies.
+  - Cycle detection: records circular dependency loops (`[A, B, A]`) without infinite recursion.
+  - Depth bounding: bounded by `max_depth` (default `5`, max `20`).
+- **Composite Risk Scoring Formula:**
+  $$\text{Score} = \text{clamp}\left( M_{\text{kind}} \times \left( S_{\text{callers}} + S_{\text{repos}} + S_{\text{files}} + S_{\text{cycles}} + S_{\text{coupling}} \right), 0.0, 100.0 \right)$$
+  - $M_{\text{kind}}$: `REMOVED` = 1.0, `MODIFIED` = 0.85, `DEPRECATED` = 0.5, `ADDED` = 0.15.
+  - Direct callers: 5.0 pts each; Transitive callers: 2.5 pts each.
+  - External repositories: $\min(40.0, N_{\text{ext}} \times 15.0)$.
+  - File spread: $\min(20.0, N_{\text{files}} \times 2.0)$.
+  - Cycles penalty: +15.0 pts if cyclic loops detected.
+  - Target afferent coupling ($C_a$): $\min(15.0, C_a \times 3.0)$.
+  - Severity mapping: $\ge 70.0$ or ($N_{\text{ext}} \ge 2$ and breaking kind) $\to$ `CRITICAL`; $\ge 45.0$ or ($N_{\text{ext}} \ge 1$ and breaking kind) $\to$ `HIGH`; $\ge 20.0 \to$ `MEDIUM`; $> 5.0 \to$ `LOW`; $\le 5.0 \to$ `MINIMAL`.
+- **AI Agent Planning Advisories:**
+  - Category `breaking_contract`: Emits expand-and-contract phase advice with backwards-compatible shims for external portfolio callers.
+  - Category `cycle_risk`: Alerts on cyclic loop risks.
+  - Category `migration_order`: Recommends staging sequence updating deepest leaf callers first.
+  - Category `test_scope`: Outlines all portfolio test suites required for regression verification.
+- **Dual-Mode Interfaces:**
+  - CLI: `cortex impact simulate [REPO]` (`--symbol`, `--file`, `--change-kind`, `--max-depth`, `--fail-on-risk`, `--json`), `cortex impact trace [REPO]` (`--symbol`, `--file`, `--max-depth`, `--tree`, `--json`).
+  - MCP: `cortex_simulate_blast_radius(repo, symbol, file_path, change_kind, max_depth)`, `cortex_trace_impact(repo, symbol, file_path, max_depth)`.
+  - HTTP Server & Client: `POST /impact/simulate`, `GET /impact/simulate`, `GET /impact/trace`, and `CortexClient.simulate_blast_radius()`, `CortexClient.trace_impact()`.
+
 ---
 
 ## Gotchas & Pitfalls
