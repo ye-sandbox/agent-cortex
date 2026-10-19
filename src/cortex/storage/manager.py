@@ -17,9 +17,16 @@ from lancedb.table import Table
 from pydantic import BaseModel, ConfigDict, Field
 
 from cortex.models.chunk import DocumentChunk
+from cortex.models.graph import CodeDependency, CodeSignature
 from cortex.storage.schema import (
+    CodeDependencyRecord,
+    CodeSignatureRecord,
     chunk_to_record_dict,
     create_chunk_record_model,
+    dependency_to_record_dict,
+    record_to_dependency,
+    record_to_signature,
+    signature_to_record_dict,
 )
 
 logger = logging.getLogger(__name__)
@@ -278,6 +285,128 @@ class StorageManager:
         safe_repo = repo.replace("'", "''")
         safe_path = file_path.replace("'", "''")
         tbl.delete(f"repo = '{safe_repo}' AND file_path = '{safe_path}'")
+
+    def get_or_create_signatures_table(self, name: str = "code_signatures") -> Table:
+        """Retrieve existing or create new table for CodeSignature records."""
+        if name in self.table_names():
+            return self._db.open_table(name)
+        return self._db.create_table(name, schema=CodeSignatureRecord)
+
+    def get_or_create_dependencies_table(self, name: str = "code_dependencies") -> Table:
+        """Retrieve existing or create new table for CodeDependency records."""
+        if name in self.table_names():
+            return self._db.open_table(name)
+        return self._db.create_table(name, schema=CodeDependencyRecord)
+
+    def upsert_signatures(
+        self,
+        signatures: Sequence[CodeSignature],
+        table_name: str = "code_signatures",
+    ) -> int:
+        """Upsert code signatures into LanceDB using deterministic IDs."""
+        if not signatures:
+            return 0
+        tbl = self.get_or_create_signatures_table(name=table_name)
+        records = [signature_to_record_dict(s) for s in signatures]
+        (
+            tbl.merge_insert("id")
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute(records)
+        )
+        return len(signatures)
+
+    def upsert_dependencies(
+        self,
+        dependencies: Sequence[CodeDependency],
+        table_name: str = "code_dependencies",
+    ) -> int:
+        """Upsert code dependencies into LanceDB using deterministic IDs."""
+        if not dependencies:
+            return 0
+        tbl = self.get_or_create_dependencies_table(name=table_name)
+        records = [dependency_to_record_dict(d) for d in dependencies]
+        (
+            tbl.merge_insert("id")
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute(records)
+        )
+        return len(dependencies)
+
+    def delete_signatures_by_file(
+        self, repo: str, file_path: str, table_name: str = "code_signatures"
+    ) -> None:
+        """Delete all code signatures for a specific file."""
+        if table_name not in self.table_names():
+            return
+        tbl = self._db.open_table(table_name)
+        safe_repo = repo.replace("'", "''")
+        safe_path = file_path.replace("'", "''")
+        tbl.delete(f"repo = '{safe_repo}' AND file_path = '{safe_path}'")
+
+    def delete_dependencies_by_file(
+        self, repo: str, file_path: str, table_name: str = "code_dependencies"
+    ) -> None:
+        """Delete all code dependencies for a specific file."""
+        if table_name not in self.table_names():
+            return
+        tbl = self._db.open_table(table_name)
+        safe_repo = repo.replace("'", "''")
+        safe_path = file_path.replace("'", "''")
+        tbl.delete(f"source_repo = '{safe_repo}' AND source_file = '{safe_path}'")
+
+    def delete_signatures_by_repo(self, repo: str, table_name: str = "code_signatures") -> None:
+        """Delete all code signatures belonging to a repository."""
+        if table_name not in self.table_names():
+            return
+        tbl = self._db.open_table(table_name)
+        safe_repo = repo.replace("'", "''")
+        tbl.delete(f"repo = '{safe_repo}'")
+
+    def delete_dependencies_by_repo(self, repo: str, table_name: str = "code_dependencies") -> None:
+        """Delete all code dependencies belonging to a repository."""
+        if table_name not in self.table_names():
+            return
+        tbl = self._db.open_table(table_name)
+        safe_repo = repo.replace("'", "''")
+        tbl.delete(f"source_repo = '{safe_repo}'")
+
+    def get_signatures(
+        self,
+        where: str | None = None,
+        limit: int | None = None,
+        table_name: str = "code_signatures",
+    ) -> list[CodeSignature]:
+        """Query code signatures with optional SQL filter and limit."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        builder = tbl.search()
+        if where:
+            builder = builder.where(where)
+        if limit is not None:
+            builder = builder.limit(limit)
+        records = builder.to_list()
+        return [record_to_signature(r) for r in records]
+
+    def get_dependencies(
+        self,
+        where: str | None = None,
+        limit: int | None = None,
+        table_name: str = "code_dependencies",
+    ) -> list[CodeDependency]:
+        """Query code dependencies with optional SQL filter and limit."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        builder = tbl.search()
+        if where:
+            builder = builder.where(where)
+        if limit is not None:
+            builder = builder.limit(limit)
+        records = builder.to_list()
+        return [record_to_dependency(r) for r in records]
 
     def count_chunks(self, table_name: str = "chunks", where: str | None = None) -> int:
         """Count rows in target table, optionally matching a SQL where filter."""

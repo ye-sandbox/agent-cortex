@@ -1,5 +1,4 @@
-"""Retrieval pipelines and scoring engines for agent-cortex."""
-
+from cortex.retrieval.graph import DependencyGraphEngine
 from cortex.retrieval.pipeline import (
     HybridRetrievalPipeline,
     build_where_clause,
@@ -11,6 +10,7 @@ from cortex.retrieval.reranker import (
 )
 
 __all__ = [
+    "DependencyGraphEngine",
     "HybridRetrievalPipeline",
     "RERANKER_MODEL_ALIASES",
     "RerankFn",

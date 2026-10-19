@@ -13,6 +13,8 @@ from cortex.ingestion.git import get_head_commit, is_git_repository, scan_git_dr
 from cortex.ingestion.manifest import ManifestManager, RepoSyncState
 from cortex.ingestion.models import FileChangeType, SyncResult
 from cortex.models.chunk import ChunkScope, DocumentChunk
+from cortex.models.graph import CodeDependency, CodeSignature
+from cortex.parsers.code.extractor import extract_code_ast
 from cortex.parsers.registry import get_parser_for_file, parse_document
 from cortex.storage.manager import StorageManager
 
@@ -113,10 +115,16 @@ class IngestionEngine:
         updated_count = 0
         processed_files = 0
 
+        if force_full:
+            self.storage.delete_signatures_by_repo(name)
+            self.storage.delete_dependencies_by_repo(name)
+
         # 1. Prune deletions from storage
         for change in drift.deleted_files:
             try:
                 self.storage.delete_by_file(repo=name, file_path=change.path, table_name=table_name)
+                self.storage.delete_signatures_by_file(repo=name, file_path=change.path)
+                self.storage.delete_dependencies_by_file(repo=name, file_path=change.path)
                 deleted_count += 1
                 processed_files += 1
             except Exception as exc:
@@ -131,6 +139,8 @@ class IngestionEngine:
                         file_path=change.old_path,
                         table_name=table_name,
                     )
+                    self.storage.delete_signatures_by_file(repo=name, file_path=change.old_path)
+                    self.storage.delete_dependencies_by_file(repo=name, file_path=change.old_path)
                     deleted_count += 1
                 except Exception as exc:
                     errors.append(f"Failed to prune old renamed path '{change.old_path}': {exc}")
@@ -139,6 +149,8 @@ class IngestionEngine:
         for change in drift.modified_files:
             try:
                 self.storage.delete_by_file(repo=name, file_path=change.path, table_name=table_name)
+                self.storage.delete_signatures_by_file(repo=name, file_path=change.path)
+                self.storage.delete_dependencies_by_file(repo=name, file_path=change.path)
             except Exception as exc:
                 errors.append(f"Failed to prune modified file '{change.path}': {exc}")
 
@@ -150,18 +162,44 @@ class IngestionEngine:
         ]
 
         chunks_to_upsert: list[DocumentChunk] = []
+        signatures_to_upsert: list[CodeSignature] = []
+        dependencies_to_upsert: list[CodeDependency] = []
 
         for change in files_to_parse:
             file_path_obj = path / change.path
             if not file_path_obj.is_file():
                 continue
 
+            try:
+                content = file_path_obj.read_text(encoding="utf-8", errors="replace")
+            except Exception as exc:
+                msg = f"Failed to read file '{change.path}' in repo '{name}': {exc}"
+                logger.warning(msg)
+                errors.append(msg)
+                continue
+
+            # AST signature and dependency extraction for code files
+            if change.path.endswith(
+                (".py", ".ts", ".tsx", ".mts", ".cts", ".js", ".jsx", ".mjs", ".cjs", ".go")
+            ):
+                try:
+                    extracted_sigs, extracted_deps = extract_code_ast(
+                        content=content,
+                        repo=name,
+                        file_path=change.path,
+                    )
+                    if extracted_sigs:
+                        signatures_to_upsert.extend(extracted_sigs)
+                    if extracted_deps:
+                        dependencies_to_upsert.extend(extracted_deps)
+                except Exception as exc:  # noqa: BLE001
+                    logger.debug("Code AST extraction failed for '%s': %s", change.path, exc)
+
             parser = get_parser_for_file(change.path)
             if parser is None:
                 continue
 
             try:
-                content = file_path_obj.read_text(encoding="utf-8", errors="replace")
                 parsed_chunks = parse_document(
                     content=content,
                     repo=name,
@@ -198,6 +236,23 @@ class IngestionEngine:
                     )
             except Exception as exc:
                 msg = f"Failed to embed and upsert chunks for repo '{name}': {exc}"
+                logger.exception(msg)
+                errors.append(msg)
+
+        # Upsert code signatures and dependencies
+        if signatures_to_upsert:
+            try:
+                self.storage.upsert_signatures(signatures_to_upsert)
+            except Exception as exc:
+                msg = f"Failed to upsert code signatures for repo '{name}': {exc}"
+                logger.exception(msg)
+                errors.append(msg)
+
+        if dependencies_to_upsert:
+            try:
+                self.storage.upsert_dependencies(dependencies_to_upsert)
+            except Exception as exc:
+                msg = f"Failed to upsert code dependencies for repo '{name}': {exc}"
                 logger.exception(msg)
                 errors.append(msg)
 
