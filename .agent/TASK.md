@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[02.3]`
-- **Title:** AST-based code signature extractor integration for cross-language dependency graphs
-- **Status:** `READY FOR PLANNING`
-- **Driver:** Trace and query cross-language call and import dependencies across repository boundaries.
+- **Task ID:** `[02.4]`
+- **Title:** Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs)
+- **Status:** `PLANNING`
+- **Driver:** Detect and alert on breaking interface, route, and dependency contract changes across repositories.
 
 ---
 
@@ -24,6 +24,7 @@
 | [01.2] | Retrieval & Reranking evaluation benchmark suite | `08277a3` | 2026-10-17 |
 | [02.1] | Automated continuous background sync service (daemonized watcher) | `f55f578` | 2026-10-19 |
 | [02.2] | Code AST chunking for Python, TypeScript, and Go contracts | `655f8d3` | 2026-10-19 |
+| [02.3] | AST-based code signature extractor integration for cross-language dependency graphs | `50cc4b6` | 2026-10-19 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
@@ -35,5 +36,6 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs)
+- [ ] Multi-repo portfolio topology visualization and dependency matrix reporting
+
 
