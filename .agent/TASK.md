@@ -33,6 +33,7 @@
 | [90.4] | Vector Dimension Guard & Automatic Vector Indexing on Sync | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.5] | Multi-Tenant HTTP Daemon Hardening (Constant-Time Auth & Isolation) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.6] | Upstream Template Synchronization & Knowledge Base Architecture | `f7e1a79` | 2026-10-17 |
+| [90.7] | CLI & HTTP Server Modularization and Presentation Decoupling | `05413bc` | 2026-10-19 |
 
 ---
 
