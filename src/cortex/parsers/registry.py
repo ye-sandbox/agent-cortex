@@ -7,6 +7,11 @@ import re
 
 from cortex.models.chunk import ChunkLifecycle, ChunkScope, DocumentChunk
 from cortex.parsers.base import BaseParser
+from cortex.parsers.code import (
+    GoContractParser,
+    PythonContractParser,
+    TypeScriptContractParser,
+)
 from cortex.parsers.compose import DockerComposeParser
 from cortex.parsers.markdown import MarkdownParser
 from cortex.parsers.openapi import OpenAPIParser
@@ -14,6 +19,24 @@ from cortex.parsers.openapi import OpenAPIParser
 _COMPOSE_FILENAME_REGEX = re.compile(r"^(docker-)?compose.*\.ya?ml$", re.IGNORECASE)
 _OPENAPI_FILENAME_REGEX = re.compile(r"^(open-?api|swagger).*\.(ya?ml|json)$", re.IGNORECASE)
 _MARKDOWN_EXTENSIONS = {".md", ".markdown", ".mdown", ".mkdn"}
+_PYTHON_EXTENSIONS = {".py"}
+_TYPESCRIPT_EXTENSIONS = {".ts", ".tsx", ".mts", ".cts"}
+_GO_EXTENSIONS = {".go"}
+
+
+def _is_test_file(basename: str) -> bool:
+    """Detect whether a filename corresponds to a unit or integration test suite."""
+    lower = basename.lower()
+    if lower.startswith("test_") or lower.endswith("_test.py") or lower == "conftest.py":
+        return True
+    if (
+        lower.endswith(".test.ts")
+        or lower.endswith(".test.tsx")
+        or lower.endswith(".spec.ts")
+        or lower.endswith(".spec.tsx")
+    ):
+        return True
+    return lower.endswith("_test.go")
 
 
 def get_parser_for_file(file_path: str, content: str | None = None) -> BaseParser | None:
@@ -33,7 +56,23 @@ def get_parser_for_file(file_path: str, content: str | None = None) -> BaseParse
     if ext in _MARKDOWN_EXTENSIONS:
         return MarkdownParser()
 
-    # 4. Content-based detection for ambiguous JSON/YAML
+    # 4. Filter test files from code contract chunking
+    if _is_test_file(basename):
+        return None
+
+    # 5. Python source files
+    if ext in _PYTHON_EXTENSIONS:
+        return PythonContractParser()
+
+    # 6. TypeScript / TSX source files
+    if ext in _TYPESCRIPT_EXTENSIONS:
+        return TypeScriptContractParser()
+
+    # 7. Go source files
+    if ext in _GO_EXTENSIONS:
+        return GoContractParser()
+
+    # 8. Content-based detection for ambiguous JSON/YAML
     if content:
         stripped = content.lstrip()
         if ext in {".yaml", ".yml", ".json"}:

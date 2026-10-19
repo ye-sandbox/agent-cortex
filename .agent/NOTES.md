@@ -32,6 +32,10 @@ Every indexed chunk is uniquely identifiable and deterministic across re-indexin
   - Chunked by **individual service (`services.<name>`)**.
   - Content includes image/build target, non-secret env vars, volume mounts, port mappings, healthcheck, and `depends_on`.
   - Category: `"infra"`.
+- **Code AST Architectural Contracts (`.py`, `.ts`, `.tsx`, `.mts`, `.cts`, `.go`):**
+  - **Python (`.py`):** Chunked by exported classes (with inheritance, docstrings, fields, and public methods) and top-level functions (signatures, docstrings, decorators). Skips private members (`_private`) unless in dunder whitelist. Category: `"contract"`.
+  - **TypeScript (`.ts`, `.tsx`, `.mts`, `.cts`):** Chunked by `interface`, `type` alias, `enum`, exported `class` (with heritage, fields, and public methods), and exported functions / arrow functions. Category: `"contract"`.
+  - **Go (`.go`):** Chunked by exported types (`interface`, `struct`, aliases), exported functions (`func Name(...)`), and exported receiver methods (`func (r *Recv) Method(...)`). Skips unexported identifiers (lowercase) and `*_test.go` files. Category: `"contract"`.
 
 ### 3. Retrieval Profiles & Scoring Formula
 
