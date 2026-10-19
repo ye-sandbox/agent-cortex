@@ -6,6 +6,7 @@ import logging
 import time
 from collections.abc import Sequence
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from cortex.config.loader import CortexConfig, RepositorySourceConfig, load_config
 from cortex.embeddings.engine import EmbeddingEngine
@@ -13,10 +14,14 @@ from cortex.ingestion.git import get_head_commit, is_git_repository, scan_git_dr
 from cortex.ingestion.manifest import ManifestManager, RepoSyncState
 from cortex.ingestion.models import FileChangeType, SyncResult
 from cortex.models.chunk import ChunkScope, DocumentChunk
+from cortex.models.drift import ContractDriftAlert
 from cortex.models.graph import CodeDependency, CodeSignature
 from cortex.parsers.code.extractor import extract_code_ast
 from cortex.parsers.registry import get_parser_for_file, parse_document
 from cortex.storage.manager import StorageManager
+
+if TYPE_CHECKING:
+    from cortex.retrieval.drift import ContractDriftEngine
 
 logger = logging.getLogger(__name__)
 
@@ -29,12 +34,21 @@ class IngestionEngine:
         storage_manager: StorageManager,
         embedding_engine: EmbeddingEngine,
         manifest_manager: ManifestManager | None = None,
+        drift_engine: ContractDriftEngine | None = None,
         batch_size: int = 32,
     ) -> None:
-        """Initialize ingestion engine with storage, embedding, and manifest managers."""
+        """Initialize ingestion engine with storage, embedding, manifest, and drift engines."""
         self.storage = storage_manager
         self.embedding = embedding_engine
         self.manifest = manifest_manager or ManifestManager(self.storage.data_dir / "manifest.json")
+        if drift_engine is None:
+            from cortex.retrieval.drift import ContractDriftEngine
+
+            drift_engine = ContractDriftEngine(
+                storage_manager=self.storage,
+                manifest_manager=self.manifest,
+            )
+        self.drift_engine = drift_engine
         self.batch_size = batch_size
 
     @classmethod
@@ -114,6 +128,22 @@ class IngestionEngine:
         added_count = 0
         updated_count = 0
         processed_files = 0
+
+        # Analyze architectural contract drift prior to storage updates
+        drift_alerts: list[ContractDriftAlert] = []
+        try:
+            drift_report = self.drift_engine.analyze_repo_drift(
+                repo_path=path,
+                repo_name=name,
+                base_commit=base_commit,
+                target_commit=target_commit,
+            )
+            drift_alerts = drift_report.alerts
+            for alert in drift_alerts:
+                if alert.severity.is_breaking:
+                    logger.warning("Breaking contract drift in '%s': %s", name, alert.summary)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("Failed to inspect contract drift for '%s': %s", name, exc)
 
         if force_full:
             self.storage.delete_signatures_by_repo(name)
@@ -289,6 +319,7 @@ class IngestionEngine:
             processed_files=processed_files,
             duration_seconds=duration,
             errors=errors,
+            drift_alerts=drift_alerts,
         )
 
     def sync_all(

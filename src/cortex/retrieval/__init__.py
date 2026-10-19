@@ -1,3 +1,4 @@
+from cortex.retrieval.drift import ContractDriftEngine
 from cortex.retrieval.graph import DependencyGraphEngine
 from cortex.retrieval.pipeline import (
     HybridRetrievalPipeline,
@@ -10,6 +11,7 @@ from cortex.retrieval.reranker import (
 )
 
 __all__ = [
+    "ContractDriftEngine",
     "DependencyGraphEngine",
     "HybridRetrievalPipeline",
     "RERANKER_MODEL_ALIASES",

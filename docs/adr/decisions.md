@@ -99,3 +99,22 @@ type: architectural-decision-log
   - *Debounce & Lifecycle:* Configurable interval (default 30s) and debounce delay (default 2s) with signal handling (`SIGINT`/`SIGTERM`) and Starlette lifespan integration for zero-leak graceful teardown.
   - *Dual-Mode Control:* Expose `cortex watch` and `cortex sync --watch`, daemon server background monitoring (`cortex serve --watch`), remote HTTP trigger (`POST /sync`), and `CortexClient.sync()`.
 - **Consequences:** Zero RAM footprint when idle; continuous real-time semantic memory consistency across portfolio satellites; seamless background monitoring on homelab nodes and local machines.
+
+---
+
+### 2026-10-19 — ADR-008: Cross-Repository Architectural Contract Drift Alerting and Impact Correlation
+
+- **Context:** Sibling microservices and satellite tools in `ye-sandbox` continuously evolve. Breaking changes (removed API endpoints, altered request/response schemas, deleted Docker Compose services/ports, or removed/mutated exported AST code signatures) can silently break downstream consumers across repository boundaries before runtime deployment.
+- **Decision:**
+  - Implement **`ContractDriftEngine` (`src/cortex/retrieval/drift.py`)**: An AST- and schema-aware diff engine comparing contract revisions across Git revisions and indexed LanceDB records.
+  - *Contract Diffs:*
+    - **OpenAPI:** Diffs operations (`METHOD /path`), detecting deleted operations (`HIGH`), newly added required parameters (`HIGH`), removed parameters (`MEDIUM`), and deprecated routes (`MEDIUM`).
+    - **Docker Compose:** Diffs service manifests (`services.<name>`), detecting deleted services (`HIGH`), removed port mappings (`HIGH`), and deleted env vars (`MEDIUM`).
+    - **Code AST Signatures:** Diffs exported `CodeSignature` contracts (`.py`, `.ts`, `.go`), detecting removed exports (`HIGH`) and signature mutations (e.g. parameter count/type changes without defaults) (`HIGH`).
+  - *Cross-Repository Dependency Correlation:* When a breaking change is detected in repository A, the engine queries `DependencyGraphEngine` and `code_dependencies` to discover any downstream portfolio repositories that import or call the altered symbol/route. If external callers exist, severity escalates to **`CRITICAL`** with detailed caller anchors (`repo:file:line`).
+  - *Consumer Interfaces:*
+    - CLI: `cortex drift audit [REPO]` with `--breaking-only`, `--cross-repo-only`, `--fail-on-breaking` (returns exit code 1 for CI/CD git hooks), and `--json`.
+    - Ingestion: `IngestionEngine.sync_repository()` automatically emits breaking drift alerts and records `drift_alerts` in `SyncResult`.
+    - MCP: Tool `cortex_get_contract_drift` for autonomous Planner and Auditor agents.
+    - HTTP Daemon & Client: `GET /drift/alerts` and `CortexClient.get_contract_drift()`.
+- **Consequences:** Proactive detection of cross-repository breaking changes prior to deployment; zero external runtime dependencies; full support for CI/CD quality gates and agentic workflows.

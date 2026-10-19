@@ -30,8 +30,12 @@
     - `cortex_search(query: str, category?: str, repo?: str, scope?: str, limit?: int)`: Hybrid semantic search returning code & doc snippets with `file://` references.
     - `cortex_get_repo_contracts(repo: str)`: Returns high-level API routes (OpenAPI endpoints), Docker Compose services, and schemas for a repository.
     - `cortex_list_technologies(tech_name: str)`: Finds which repositories utilize a given technology (e.g. `VictoriaLogs`, `FastAPI`, `LanceDB`, `Redis`).
+    - `cortex_get_dependencies(repo: str, file_path?: str, symbol?: str, cross_repo_only?: bool, limit?: int)`: Traces outgoing code and module dependencies.
+    - `cortex_get_dependents(symbol: str, module?: str, limit?: int)`: Traces incoming callers and cross-repo dependents.
+    - `cortex_get_code_signatures(query: str, repo?: str, kind?: str, language?: str, limit?: int)`: AST code contracts and signatures.
+    - `cortex_get_contract_drift(repo?: str, breaking_only?: bool, cross_repo_only?: bool)`: Audits architectural contract drift and breaking changes across repositories.
 - **CLI Contract (`cortex`):**
-  - Commands: `cortex bootstrap`, `cortex models download`, `cortex search`, `cortex sync`, `cortex status`.
+  - Commands: `cortex bootstrap`, `cortex models`, `cortex search`, `cortex sync`, `cortex watch`, `cortex status`, `cortex deps`, `cortex drift`.
   - Flag Invariant: `--json` MUST output strictly valid NDJSON/JSON for programmatic ingestion by agent subshells.
 - **Dual-Mode Transport Contract:**
   - Local mode: Embedded LanceDB + in-process FastEmbed ONNX.

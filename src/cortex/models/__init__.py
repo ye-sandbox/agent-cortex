@@ -14,6 +14,13 @@ from cortex.models.chunk import (
     format_contract_chunks,
     resolve_contract_categories,
 )
+from cortex.models.drift import (
+    ChangeKind,
+    ContractDriftAlert,
+    ContractDriftReport,
+    ContractType,
+    DriftSeverity,
+)
 from cortex.models.graph import (
     CodeDependency,
     CodeSignature,
@@ -31,17 +38,22 @@ from cortex.models.profile import (
 )
 
 __all__ = [
+    "ChangeKind",
     "ChunkCategory",
     "ChunkLifecycle",
     "ChunkScope",
     "CodeDependency",
     "CodeSignature",
     "CompactSearchResult",
+    "ContractDriftAlert",
+    "ContractDriftReport",
+    "ContractType",
     "CrossRepoLink",
     "DependencyEdgeType",
     "DependencyQueryResult",
     "DependentsQueryResult",
     "DocumentChunk",
+    "DriftSeverity",
     "HardwareProfile",
     "HardwareProfileName",
     "PREDEFINED_PROFILES",

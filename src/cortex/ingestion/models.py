@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from cortex.models.drift import ContractDriftAlert
+
 
 class FileChangeType(StrEnum):
     """Git file status codes for working tree and commit drift."""
@@ -97,6 +99,10 @@ class SyncResult(BaseModel):
     errors: list[str] = Field(
         default_factory=list,
         description="Error messages encountered during sync",
+    )
+    drift_alerts: list[ContractDriftAlert] = Field(
+        default_factory=list,
+        description="Architectural contract drift alerts detected during sync",
     )
 
     @property

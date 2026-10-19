@@ -37,6 +37,8 @@ from cortex.models.chunk import (
     format_contract_chunks,
     resolve_contract_categories,
 )
+from cortex.models.drift import ContractDriftReport
+from cortex.retrieval.drift import ContractDriftEngine
 from cortex.retrieval.graph import DependencyGraphEngine
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
 from cortex.storage.manager import StorageManager
@@ -478,6 +480,47 @@ def create_app(
         )
         return JSONResponse(res.model_dump(mode="json"))
 
+    async def drift_alerts_endpoint(request: Request) -> JSONResponse:
+        repo = request.query_params.get("repo", "").strip() or None
+        breaking_str = request.query_params.get("breaking_only", "false").lower()
+        breaking_only = breaking_str in ("1", "true", "yes")
+        cross_repo_str = request.query_params.get("cross_repo_only", "false").lower()
+        cross_repo_only = cross_repo_str in ("1", "true", "yes")
+
+        cfg = get_config()
+        drift_engine = ContractDriftEngine.from_config(cfg)
+        sources = resolve_sync_sources(
+            config=cfg,
+            repo_filter=repo,
+            all_flag=(repo is None),
+        )
+
+        if repo:
+            target_src = next((s for s in sources if s.get_repo_name() == repo), None)
+            if target_src:
+                raw_report = drift_engine.analyze_repo_drift(
+                    repo_path=target_src.path,
+                    repo_name=target_src.get_repo_name(),
+                )
+            else:
+                raw_report = ContractDriftReport(repo=repo)
+        else:
+            raw_report = drift_engine.analyze_portfolio_drift(sources=sources)
+
+        filtered_alerts = raw_report.alerts
+        if breaking_only:
+            filtered_alerts = [a for a in filtered_alerts if a.severity.is_breaking]
+        if cross_repo_only:
+            filtered_alerts = [a for a in filtered_alerts if len(a.impacted_repos) > 0]
+
+        report = ContractDriftReport.from_alerts(
+            filtered_alerts,
+            repo=raw_report.repo,
+            base_commit=raw_report.base_commit,
+            target_commit=raw_report.target_commit,
+        )
+        return JSONResponse(report.model_dump(mode="json"))
+
     # Dynamic Configuration Endpoints
     async def get_config_endpoint(request: Request) -> JSONResponse:
         isolation_err = check_tenant_isolation(request)
@@ -644,6 +687,7 @@ def create_app(
         Route("/graph/dependencies", graph_dependencies_endpoint, methods=["GET"]),
         Route("/graph/dependents", graph_dependents_endpoint, methods=["GET"]),
         Route("/graph/signatures", graph_signatures_endpoint, methods=["GET"]),
+        Route("/drift/alerts", drift_alerts_endpoint, methods=["GET"]),
         Route("/sync", sync_endpoint, methods=["POST"]),
         Route("/config", get_config_endpoint, methods=["GET"]),
         Route("/config", set_config_endpoint, methods=["POST", "PUT"]),

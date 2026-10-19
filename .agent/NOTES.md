@@ -67,6 +67,20 @@ Runtime configuration can be persisted and managed dynamically without daemon re
 - **Archived Tasks vs. Repositories:** `ARCHIVE.md` files store active historic knowledge; they MUST NOT trigger repo-level exclusion. Only explicit repository deprecation flags a repo as archived.
 - **Token Efficiency:** MCP and CLI outputs presented to LLMs use compact markdown anchors (`[repo] path > breadcrumb`) and omit verbose metadata (commit SHA, raw UUIDs) to conserve context tokens.
 
+### 6. Architectural Contract Drift & Breaking Change Alerting
+
+- **Severity Hierarchy:**
+  - `CRITICAL`: Cross-repository breaking change directly affecting external portfolio callers or importers.
+  - `HIGH`: Intra-repository breaking change (deleted endpoint/service/exported symbol, added required parameters, removed port mapping).
+  - `MEDIUM`: Deprecations, deleted parameters, removed env variables.
+  - `INFO` / `LOW`: Additive additions (new endpoints, services, or exported signatures).
+- **Correlation Engine:** `ContractDriftEngine` cross-references modified/deleted contracts against `code_dependencies` to identify all downstream callers across the portfolio.
+- **Dual-Mode Interfaces:**
+  - CLI: `cortex drift audit [REPO]` (`--breaking-only`, `--cross-repo-only`, `--fail-on-breaking`, `--json`), `cortex drift alerts`.
+  - Ingestion: `IngestionEngine.sync_repository()` emits warnings for breaking changes and populates `SyncResult.drift_alerts`.
+  - MCP: `cortex_get_contract_drift(repo?: str, breaking_only: bool, cross_repo_only: bool)`.
+  - HTTP Server & Client: `GET /drift/alerts` and `CortexClient.get_contract_drift()`.
+
 ---
 
 ## Gotchas & Pitfalls
