@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[02.4]`
-- **Title:** Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs)
+- **Task ID:** `[02.5]`
+- **Title:** Multi-repo portfolio topology visualization and dependency matrix reporting
 - **Status:** `PLANNING`
-- **Driver:** Detect and alert on breaking interface, route, and dependency contract changes across repositories.
+- **Driver:** Synthesize and visualize cross-repository dependency topology matrices and architectural bridges.
 
 ---
 
@@ -25,6 +25,7 @@
 | [02.1] | Automated continuous background sync service (daemonized watcher) | `f55f578` | 2026-10-19 |
 | [02.2] | Code AST chunking for Python, TypeScript, and Go contracts | `655f8d3` | 2026-10-19 |
 | [02.3] | AST-based code signature extractor integration for cross-language dependency graphs | `50cc4b6` | 2026-10-19 |
+| [02.4] | Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs) | `faf1e1d` | 2026-10-19 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
@@ -36,6 +37,7 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Multi-repo portfolio topology visualization and dependency matrix reporting
+- [ ] Interactive portfolio architecture graph export (DOT / Mermaid / Cytoscape)
+
 
 
