@@ -7,10 +7,12 @@ with multi-tenant resolution and Bearer token authentication.
 
 from __future__ import annotations
 
+import asyncio
 import hmac
 import json
 import logging
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from typing import Any
 
 import uvicorn
@@ -23,6 +25,10 @@ from starlette.routing import Route
 
 from cortex.config.dynamic import DynamicConfigManager
 from cortex.config.loader import CortexConfig, load_config
+from cortex.ingestion.discovery import resolve_sync_sources
+from cortex.ingestion.engine import IngestionEngine
+from cortex.ingestion.models import SyncResult
+from cortex.ingestion.watcher import RepoWatcher, WatcherConfig
 from cortex.models.chunk import (
     ChunkCategory,
     ChunkScope,
@@ -110,6 +116,8 @@ def create_app(
     storage: StorageManager | None = None,
     api_key: str | None = None,
     dynamic_config: DynamicConfigManager | None = None,
+    watch: bool = False,
+    watch_interval: float | None = None,
 ) -> Starlette:
     """Create and configure Starlette ASGI application for agent-cortex daemon."""
     lazy_config = config
@@ -224,16 +232,20 @@ def create_app(
         dyn_mgr = get_dynamic_config()
         tenants = dyn_mgr.list_tenants()
 
-        return JSONResponse(
-            {
-                "status": "ok",
-                "version": __version__,
-                "profile": profile.name,
-                "total_chunks": total_chunks,
-                "storage_dir": str(current_cfg.storage.data_dir),
-                "tenants_count": len(tenants),
-            }
-        )
+        resp_payload: dict[str, Any] = {
+            "status": "ok",
+            "version": __version__,
+            "profile": profile.name,
+            "total_chunks": total_chunks,
+            "storage_dir": str(current_cfg.storage.data_dir),
+            "tenants_count": len(tenants),
+        }
+
+        watcher_inst = getattr(request.app.state, "watcher", None)
+        if watcher_inst is not None and isinstance(watcher_inst, RepoWatcher):
+            resp_payload["watcher"] = watcher_inst.get_status().model_dump()
+
+        return JSONResponse(resp_payload)
 
     async def search_endpoint(request: Request) -> Response:
         body: dict[str, Any] = {}
@@ -492,12 +504,68 @@ def create_app(
             tenants = [t for t in tenants if str(t.get("tenant_id", "")).strip() == auth_tenant]
         return JSONResponse({"total_tenants": len(tenants), "tenants": tenants})
 
+    async def sync_endpoint(request: Request) -> JSONResponse:
+        body: dict[str, Any] = {}
+        if request.headers.get("content-type", "").startswith("application/json"):
+            try:
+                raw_body = await request.json()
+                if isinstance(raw_body, dict):
+                    body = raw_body
+            except Exception:
+                return JSONResponse(
+                    {"error": "Bad Request", "detail": "Invalid JSON body"},
+                    status_code=400,
+                )
+
+        repo_filter = body.get("repo")
+        all_flag = bool(body.get("all", False))
+        force_full = bool(body.get("force_full", False))
+
+        current_cfg = get_config()
+        effective_repo = (
+            str(repo_filter).strip() if repo_filter and str(repo_filter).strip() else None
+        )
+        sources = resolve_sync_sources(
+            config=current_cfg,
+            repo_filter=effective_repo,
+            all_flag=all_flag,
+        )
+
+        if not sources:
+            return JSONResponse(
+                {
+                    "status": "not_found" if effective_repo else "ok",
+                    "detail": (
+                        f"Repository '{effective_repo}' not found"
+                        if effective_repo
+                        else "No repositories configured"
+                    ),
+                    "total_synced": 0,
+                    "synced": [],
+                },
+                status_code=404 if effective_repo else 200,
+            )
+
+        def _do_sync() -> list[SyncResult]:
+            eng = IngestionEngine.from_config(current_cfg)
+            return eng.sync_all(sources=sources, force_full=force_full)
+
+        results = await asyncio.to_thread(_do_sync)
+        return JSONResponse(
+            {
+                "status": "ok",
+                "total_synced": len(results),
+                "synced": [r.model_dump() for r in results],
+            }
+        )
+
     routes = [
         Route("/health", health_endpoint, methods=["GET"]),
         Route("/healthz", health_endpoint, methods=["GET"]),
         Route("/search", search_endpoint, methods=["GET", "POST"]),
         Route("/contracts", contracts_endpoint, methods=["GET"]),
         Route("/technologies", technologies_endpoint, methods=["GET"]),
+        Route("/sync", sync_endpoint, methods=["POST"]),
         Route("/config", get_config_endpoint, methods=["GET"]),
         Route("/config", set_config_endpoint, methods=["POST", "PUT"]),
         Route("/config", delete_config_endpoint, methods=["DELETE"]),
@@ -516,7 +584,37 @@ def create_app(
             )
         )
 
-    return Starlette(routes=routes, middleware=middleware)
+    @asynccontextmanager
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:
+        watcher_task: asyncio.Task[None] | None = None
+        should_watch = watch or get_config().sync.auto_watch
+        if should_watch:
+            cfg = get_config()
+            interval = watch_interval if watch_interval is not None else cfg.sync.interval
+            watcher = RepoWatcher(
+                config=cfg,
+                watcher_config=WatcherConfig(
+                    interval=interval,
+                    debounce=cfg.sync.debounce,
+                    all_repos=True,
+                ),
+            )
+            app.state.watcher = watcher
+            watcher_task = asyncio.create_task(watcher.run_loop_async())
+
+        try:
+            yield
+        finally:
+            if watcher_task is not None:
+                watcher_inst = getattr(app.state, "watcher", None)
+                if watcher_inst is not None and isinstance(watcher_inst, RepoWatcher):
+                    watcher_inst.stop()
+                try:
+                    await asyncio.wait_for(watcher_task, timeout=5.0)
+                except TimeoutError, asyncio.CancelledError:
+                    watcher_task.cancel()
+
+    return Starlette(routes=routes, middleware=middleware, lifespan=lifespan)
 
 
 def run_server(
@@ -526,7 +624,15 @@ def run_server(
     config: CortexConfig | None = None,
     log_level: str = "info",
     dynamic_config: DynamicConfigManager | None = None,
+    watch: bool = False,
+    watch_interval: float | None = None,
 ) -> None:
     """Launch uvicorn server running agent-cortex daemon."""
-    app = create_app(config=config, api_key=api_key, dynamic_config=dynamic_config)
+    app = create_app(
+        config=config,
+        api_key=api_key,
+        dynamic_config=dynamic_config,
+        watch=watch,
+        watch_interval=watch_interval,
+    )
     uvicorn.run(app, host=host, port=port, log_level=log_level)

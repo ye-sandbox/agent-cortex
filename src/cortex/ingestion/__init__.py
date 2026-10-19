@@ -19,6 +19,12 @@ from cortex.ingestion.models import (
     GitDriftSummary,
     SyncResult,
 )
+from cortex.ingestion.watcher import (
+    RepoWatcher,
+    RepoWatchStatus,
+    WatcherConfig,
+    WatcherSummary,
+)
 
 __all__ = [
     "FileChange",
@@ -27,8 +33,12 @@ __all__ = [
     "IngestionEngine",
     "ManifestManager",
     "RepoSyncState",
+    "RepoWatchStatus",
+    "RepoWatcher",
     "SyncManifest",
     "SyncResult",
+    "WatcherConfig",
+    "WatcherSummary",
     "get_git_common_dir",
     "get_git_root",
     "get_head_commit",

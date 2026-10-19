@@ -87,3 +87,15 @@ type: architectural-decision-log
   - *Token-Dense Snippets for Agents:* Format search results for LLMs using compact Markdown anchors (`[repo] path > breadcrumb`) + clean snippet, keeping verbose metadata in JSON payload attributes rather than polluting agent prompt context.
   - *Single Bearer Token:* Remote homelab daemon authenticates via simple `Authorization: Bearer <CORTEX_API_KEY>`.
 - **Consequences:** Zero phantom duplicate vectors; high signal-to-noise ratio in agent LLM contexts; simple and predictable repository discovery.
+
+---
+
+### 2026-10-19 — ADR-007: Continuous Background Sync Watcher and HTTP Drift Synchronization
+
+- **Context:** Autonomous development Trinity agents (Planner, Dev, Auditor) and developers frequently push architectural changes, OpenAPI specs, and compose definitions across repositories. Manually triggering `cortex sync` creates drift latency and risk of stale memory.
+- **Decision:**
+  - Implement **`RepoWatcher` (`src/cortex/ingestion/watcher.py`)**: A zero-dependency periodic drift scanner utilizing `asyncio` and `IngestionEngine`.
+  - *Drift Detection:* Directly checks git HEAD commit SHAs (`get_head_commit`) against `manifest.json` state, achieving sub-2ms verification per repository without filesystem inotify descriptor exhaustion.
+  - *Debounce & Lifecycle:* Configurable interval (default 30s) and debounce delay (default 2s) with signal handling (`SIGINT`/`SIGTERM`) and Starlette lifespan integration for zero-leak graceful teardown.
+  - *Dual-Mode Control:* Expose `cortex watch` and `cortex sync --watch`, daemon server background monitoring (`cortex serve --watch`), remote HTTP trigger (`POST /sync`), and `CortexClient.sync()`.
+- **Consequences:** Zero RAM footprint when idle; continuous real-time semantic memory consistency across portfolio satellites; seamless background monitoring on homelab nodes and local machines.

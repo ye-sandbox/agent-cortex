@@ -147,6 +147,27 @@ class RemoteConfig(BaseModel):
     )
 
 
+class SyncConfig(BaseModel):
+    """Configuration for continuous background sync and repository watcher."""
+
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    interval: float = Field(
+        default=30.0,
+        ge=0.01,
+        description="Polling interval in seconds between repository drift checks",
+    )
+    debounce: float = Field(
+        default=2.0,
+        ge=0.0,
+        description="Debounce delay in seconds before triggering index sync",
+    )
+    auto_watch: bool = Field(
+        default=False,
+        description="Whether to run background watcher alongside server daemon",
+    )
+
+
 class CortexConfig(BaseModel):
     """Root configuration for agent-cortex."""
 
@@ -175,6 +196,10 @@ class CortexConfig(BaseModel):
     remote: RemoteConfig = Field(
         default_factory=RemoteConfig,
         description="Dual-Mode remote hub configuration",
+    )
+    sync: SyncConfig = Field(
+        default_factory=SyncConfig,
+        description="Continuous synchronization and background watcher configuration",
     )
 
     def get_active_profile(self) -> HardwareProfile:
