@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[02.1]`
-- **Title:** Automated continuous background sync service (daemonized watcher)
+- **Task ID:** `[02.2]`
+- **Title:** Code AST chunking for Python, TypeScript, and Go contracts
 - **Status:** `READY FOR PLANNING`
-- **Driver:** Provide periodic / file-watcher background synchronization for configured portfolio repositories.
+- **Driver:** Parse and index architectural contracts (interfaces, types, exported classes/functions) across codebases.
 
 ---
 
@@ -22,6 +22,7 @@
 |---|---|---|---|
 | [01.1] | Hardware Profiles Matrix & FastEmbed Model Alignment | `fa2f27e` | 2026-10-17 |
 | [01.2] | Retrieval & Reranking evaluation benchmark suite | `08277a3` | 2026-10-17 |
+| [02.1] | Automated continuous background sync service (daemonized watcher) | `f55f578` | 2026-10-19 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
@@ -33,4 +34,5 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Code AST chunking for Python, TypeScript, and Go contracts
+- [ ] AST-based code signature extractor integration for cross-language dependency graphs
+
