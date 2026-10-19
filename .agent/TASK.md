@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[03.1]`
-- **Title:** Cross-repository transitive blast-radius simulation and impact tracing for AI agent planning
+- **Task ID:** `[03.2]`
+- **Title:** Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`)
 - **Status:** `PLANNING`
-- **Driver:** Trace transitive caller chains across portfolio repositories to predict breaking impact and advise autonomous Trinity agent planners.
+- **Driver:** Provide an interactive standalone web spatial canvas visualization for portfolio architectural topology and dependency inspection.
 
 ---
 
@@ -27,6 +27,7 @@
 | [02.3] | AST-based code signature extractor integration for cross-language dependency graphs | `50cc4b6` | 2026-10-19 |
 | [02.4] | Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs) | `faf1e1d` | 2026-10-19 |
 | [02.5] | Multi-repo portfolio topology visualization and dependency matrix reporting | `35183c1` | 2026-10-19 |
+| [03.1] | Cross-repository transitive blast-radius simulation and impact tracing for AI agent planning | `c734170` | 2026-10-19 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
@@ -39,8 +40,8 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`)
 - [ ] Portfolio architectural contract evolution timeline and changelog synthesis
+- [ ] Multi-repo portfolio change intent simulation and automated contract patch generation
 
 
 
