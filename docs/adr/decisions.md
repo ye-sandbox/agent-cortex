@@ -118,3 +118,26 @@ type: architectural-decision-log
     - MCP: Tool `cortex_get_contract_drift` for autonomous Planner and Auditor agents.
     - HTTP Daemon & Client: `GET /drift/alerts` and `CortexClient.get_contract_drift()`.
 - **Consequences:** Proactive detection of cross-repository breaking changes prior to deployment; zero external runtime dependencies; full support for CI/CD quality gates and agentic workflows.
+
+---
+
+### 2026-10-19 — ADR-009: Portfolio Dependency Topology, Architectural Coupling Metrics, and Multi-Format Graph Export
+
+- **Context:** As `ye-sandbox` portfolio repositories grow in count and complexity, understanding the cross-repository dependency topology, identifying foundational core services versus consumer leaves, pinpointing architectural bottlenecks, and catching circular dependencies is essential for both human system architects and autonomous Dev Trinity agents.
+- **Decision:**
+  - Implement **`PortfolioTopologyEngine` (`src/cortex/retrieval/topology.py`)**: An in-process topological synthesis engine leveraging `code_dependencies`, `code_signatures`, and `chunks`.
+  - *Architectural Coupling Metrics:*
+    - **Afferent Coupling ($C_a$):** Number of external portfolio repositories that depend on a repository (incoming).
+    - **Efferent Coupling ($C_e$):** Number of external portfolio repositories that a repository depends on (outgoing).
+    - **Instability Index ($I$):** $I = \frac{C_e}{C_a + C_e} \in [0.0, 1.0]$. Repositories with $I \le 0.3$ represent stable, foundational architectural hubs; $I \ge 0.7$ represent consumer applications/leaves.
+    - **Circular Dependency Detection:** DFS cycle detection canonically deduplicating elementary directed cycles across repositories.
+  - *Multi-Format Exporters:*
+    - **Mermaid:** Native Markdown-compatible `flowchart LR/TD` with node metrics and highlighted cycles.
+    - **Graphviz DOT:** Standard `digraph PortfolioTopology { ... }` with attribute styling.
+    - **Cytoscape JSON:** Standard Cytoscape.js format `{"elements": {"nodes": [...], "edges": [...]}}` for spatial canvas rendering.
+    - **NxN Rich Terminal Matrix:** ASCII/Unicode colored matrix table and summary cards for human engineers.
+  - *Consumer Interfaces:*
+    - CLI: `cortex topology matrix` (`--min-weight`, `--highlight-cycles`, `--json`), `cortex topology graph` (`--format`, `--direction`, `--output`), `cortex topology cycles` (`--fail-on-cycles`).
+    - HTTP Server & Dual-Mode Client: `GET /topology/graph`, `GET /topology/matrix`, `GET /topology/cycles`, and `CortexClient` methods.
+    - MCP Server: Tools `cortex_get_portfolio_topology` and `cortex_get_dependency_matrix`.
+- **Consequences:** Instant, zero-overhead visualization of organization-wide microservice and tool topologies; automated prevention of circular dependencies in CI/CD pipelines; full compatibility with Markdown previews, Graphviz tools, and web canvas interfaces.

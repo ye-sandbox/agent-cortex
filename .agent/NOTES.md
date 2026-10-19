@@ -81,6 +81,26 @@ Runtime configuration can be persisted and managed dynamically without daemon re
   - MCP: `cortex_get_contract_drift(repo?: str, breaking_only: bool, cross_repo_only: bool)`.
   - HTTP Server & Client: `GET /drift/alerts` and `CortexClient.get_contract_drift()`.
 
+### 7. Portfolio Topology & Dependency Matrix Invariants
+
+- **Coupling & Stability Metrics:**
+  - $C_a$ (Afferent Coupling): Distinct incoming external portfolio repositories depending on target repository.
+  - $C_e$ (Efferent Coupling): Distinct outgoing external portfolio repositories target repository depends on.
+  - Instability Index: $I = \frac{C_e}{C_a + C_e} \in [0.0, 1.0]$. $I = 0.0$ signifies maximally stable architectural foundation; $I = 1.0$ signifies pure consumer leaf.
+  - Leaf node: $C_e == 0$; Root/Foundation node: $C_a == 0$.
+- **Graph Invariants & Density:**
+  - Directed graph density: $D = \frac{E}{V(V - 1)}$ where $V = \text{total repositories}$ and $E = \text{total cross-repo edges}$.
+  - Weight: Total number of cross-repository AST calls, imports, and bridge references.
+- **Cycle Detection:** Canonical DFS cycle tracking deduplicating cyclic permutations (e.g. `[A, B, A]`, `[A, B, C, A]`).
+- **Export Specifications:**
+  - Mermaid: `flowchart LR` / `flowchart TD` with sanitized identifiers (`repo_<sanitized>`), coupling metrics labels, and red stroke cycle highlights.
+  - Graphviz DOT: `digraph PortfolioTopology { rankdir=LR; ... }`.
+  - Cytoscape JSON: Standard `{"elements": {"nodes": [...], "edges": [...]}}`.
+- **Dual-Mode Interfaces:**
+  - CLI: `cortex topology matrix` (`--min-weight`, `--highlight-cycles`, `--json`), `cortex topology graph` (`--format`, `--direction`, `--output`), `cortex topology cycles` (`--fail-on-cycles`).
+  - MCP: `cortex_get_portfolio_topology(format, direction, min_weight)`, `cortex_get_dependency_matrix(min_weight)`.
+  - HTTP Server & Client: `GET /topology/graph`, `GET /topology/matrix`, `GET /topology/cycles`, and `CortexClient` methods.
+
 ---
 
 ## Gotchas & Pitfalls

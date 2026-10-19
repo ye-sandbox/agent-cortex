@@ -36,6 +36,15 @@ from cortex.models.profile import (
     HardwareProfileName,
     resolve_hardware_profile,
 )
+from cortex.models.topology import (
+    DependencyCycle,
+    PortfolioDependencyEdge,
+    PortfolioDependencyMatrix,
+    PortfolioMatrixRow,
+    PortfolioRepoNode,
+    PortfolioTopologyGraph,
+    TopologyExportFormat,
+)
 
 __all__ = [
     "ChangeKind",
@@ -49,6 +58,7 @@ __all__ = [
     "ContractDriftReport",
     "ContractType",
     "CrossRepoLink",
+    "DependencyCycle",
     "DependencyEdgeType",
     "DependencyQueryResult",
     "DependentsQueryResult",
@@ -57,11 +67,17 @@ __all__ = [
     "HardwareProfile",
     "HardwareProfileName",
     "PREDEFINED_PROFILES",
+    "PortfolioDependencyEdge",
+    "PortfolioDependencyMatrix",
+    "PortfolioMatrixRow",
+    "PortfolioRepoNode",
+    "PortfolioTopologyGraph",
     "RepoContractChunk",
     "SearchResultChunk",
     "SignaturesQueryResult",
     "TechSummary",
     "TechUsage",
+    "TopologyExportFormat",
     "aggregate_tech_summary",
     "format_contract_chunks",
     "resolve_contract_categories",

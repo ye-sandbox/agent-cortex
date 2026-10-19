@@ -9,11 +9,13 @@ from cortex.retrieval.reranker import (
     RerankerEngine,
     RerankFn,
 )
+from cortex.retrieval.topology import PortfolioTopologyEngine
 
 __all__ = [
     "ContractDriftEngine",
     "DependencyGraphEngine",
     "HybridRetrievalPipeline",
+    "PortfolioTopologyEngine",
     "RERANKER_MODEL_ALIASES",
     "RerankFn",
     "RerankerEngine",

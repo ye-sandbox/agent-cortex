@@ -23,6 +23,10 @@ from cortex.models.graph import (
     DependentsQueryResult,
     SignaturesQueryResult,
 )
+from cortex.models.topology import (
+    PortfolioDependencyMatrix,
+    PortfolioTopologyGraph,
+)
 from cortex.retrieval.graph import DependencyGraphEngine
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
 from cortex.storage.manager import StorageManager
@@ -375,12 +379,72 @@ def create_cortex_mcp_server(
                 cross_repo_only=cross_repo_only,
             )
 
-        client = CortexClient(config=get_config(), mode="in_process")
+        client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
         return client.get_contract_drift(
             repo=repo,
             breaking_only=breaking_only,
             cross_repo_only=cross_repo_only,
         )
+
+    @server.tool(
+        name="cortex_get_portfolio_topology",
+        description=(
+            "Synthesize and visualize cross-repository portfolio topology, coupling metrics "
+            "(Ca, Ce, instability), and architectural graphs "
+            "(Mermaid flowchart, DOT, or Cytoscape)."
+        ),
+    )
+    def cortex_get_portfolio_topology(
+        format: str = "mermaid",
+        direction: str = "LR",
+        include_internal: bool = False,
+        min_weight: int = 1,
+    ) -> str:
+        """Query portfolio architecture topology graph and metrics."""
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            res = remote_client.get_portfolio_topology(
+                format=format,
+                direction=direction,
+                include_internal=include_internal,
+                min_weight=min_weight,
+            )
+        else:
+            client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+            res = client.get_portfolio_topology(
+                format=format,
+                direction=direction,
+                include_internal=include_internal,
+                min_weight=min_weight,
+            )
+
+        if isinstance(res, PortfolioTopologyGraph):
+            import json
+
+            return json.dumps(res.model_dump(mode="json"), indent=2)
+        if isinstance(res, dict):
+            import json
+
+            return json.dumps(res, indent=2)
+        return str(res)
+
+    @server.tool(
+        name="cortex_get_dependency_matrix",
+        description=(
+            "Synthesize cross-repository dependency NxN matrix, architectural coupling metrics "
+            "(Afferent Ca, Efferent Ce, Instability), and circular dependency warnings."
+        ),
+    )
+    def cortex_get_dependency_matrix(
+        min_weight: int = 0,
+    ) -> PortfolioDependencyMatrix:
+        """Query cross-repository dependency NxN matrix and coupling metrics."""
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            return remote_client.get_dependency_matrix(min_weight=min_weight)
+
+        client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+        return client.get_dependency_matrix(min_weight=min_weight)
 
     return server
 
