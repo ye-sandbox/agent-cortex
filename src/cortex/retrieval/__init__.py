@@ -2,6 +2,7 @@ from cortex.retrieval.drift import ContractDriftEngine
 from cortex.retrieval.evolution import ContractEvolutionEngine
 from cortex.retrieval.graph import DependencyGraphEngine
 from cortex.retrieval.impact import ImpactAnalysisEngine
+from cortex.retrieval.intent import ChangeIntentEngine
 from cortex.retrieval.pipeline import (
     HybridRetrievalPipeline,
     build_where_clause,
@@ -14,6 +15,7 @@ from cortex.retrieval.reranker import (
 from cortex.retrieval.topology import PortfolioTopologyEngine
 
 __all__ = [
+    "ChangeIntentEngine",
     "ContractDriftEngine",
     "ContractEvolutionEngine",
     "DependencyGraphEngine",

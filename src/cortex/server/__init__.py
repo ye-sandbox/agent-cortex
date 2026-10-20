@@ -31,6 +31,7 @@ from cortex.server.routes.evolution import create_evolution_routes
 from cortex.server.routes.graph import create_graph_routes
 from cortex.server.routes.health import create_health_routes
 from cortex.server.routes.impact import create_impact_routes
+from cortex.server.routes.intent import create_intent_routes
 from cortex.server.routes.search import create_search_routes
 from cortex.server.routes.sync import create_sync_routes
 from cortex.server.routes.topology import create_topology_routes
@@ -75,6 +76,7 @@ def create_app(
         *create_drift_routes(ctx),
         *create_evolution_routes(ctx),
         *create_impact_routes(ctx),
+        *create_intent_routes(ctx),
         *create_topology_routes(ctx),
         *create_sync_routes(ctx),
         *create_config_routes(ctx),

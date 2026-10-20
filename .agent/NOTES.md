@@ -150,6 +150,23 @@ Runtime configuration can be persisted and managed dynamically without daemon re
   - MCP: `cortex_get_contract_timeline(repo, contract_type, change_kind, breaking_only, limit)`, `cortex_synthesize_changelog(repo, group_by, breaking_only, limit)`.
   - HTTP Server & Client: `GET /timeline`, `GET /changelog`, `POST /history/scan`, and `CortexClient.get_contract_timeline()`, `CortexClient.synthesize_changelog()`.
 
+### 10. Multi-Repo Change Intent Simulation & Automated Contract Patch Generation Contracts
+
+- **Change Intent Declarations & Plans:**
+  - `ContractChangeIntent`: captures target repo, file path, symbol, action (`RENAME_SYMBOL`, `MODIFY_SIGNATURE`, `CHANGE_ENDPOINT`, `REPLACE_CONTRACT`, `REMOVE_CONTRACT`, `DEPRECATE_CONTRACT`), replacement symbol, parameter renamings, and replacement snippet.
+  - `PortfolioChangePlan`: coherent batch of cross-repo intents evaluated as a single architectural migration.
+- **Simulation & Violation Detection:**
+  - `ChangeIntentEngine`: traces downstream call sites and imports across indexed dependency graph (`code_dependencies`).
+  - Detects contract violations: unmapped symbols, breaking removals, parameter divergence in callers, and deprecated usage.
+  - Combines with `ImpactAnalysisEngine` for composite multi-hop blast radius risk scoring (0.0 to 100.0) and recommended staging order (leaf callers before root).
+- **Automated Contract Migration Patches:**
+  - Generates `git apply`-compatible unified diffs (`diff -u`) across affected downstream consumer repositories.
+  - Synthesizes accurate line transformations (symbol renaming with word boundaries, endpoint URL updates, and keyword argument renames) on mounted disk files or from raw statement AST records.
+- **Dual-Mode Interfaces:**
+  - CLI: `cortex intent simulate [REPO]` (`--symbol`, `--action`, `--new-symbol`, `--plan`, `--max-depth`, `--generate-patches`, `--fail-on-risk`, `--fail-on-violations`, `--json`), `cortex intent patch [REPO]` (`--symbol`, `--action`, `--new-symbol`, `--plan`, `--output-dir`, `--json`).
+  - MCP: `cortex_simulate_change_intent(repo, symbol, action, new_symbol, file_path, max_depth, generate_patches, plan_json)`, `cortex_generate_contract_patches(repo, symbol, action, new_symbol, file_path, plan_json)`.
+  - HTTP Server & Client: `POST /intent/simulate`, `POST /intent/patch`, and `CortexClient.simulate_change_intent()`, `CortexClient.generate_contract_patches()`.
+
 ---
 
 ## Gotchas & Pitfalls
