@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[90.11]`
-- **Title:** Dual-Mode CortexClient Domain Mixin Decomposition
+- **Task ID:** `[99.1]`
+- **Title:** Release Hardening v0.3.0
 - **Status:** `PLANNING`
-- **Driver:** Decompose `client.py` (1,391 LOC) into domain mixins (`cortex/client/search.py`, `cortex/client/graph.py`, `cortex/client/drift.py`, `cortex/client/topology.py`, `cortex/client/impact.py`, `cortex/client/evolution.py`, `cortex/client/intent.py`, `cortex/client/sync.py`, `cortex/client/config.py`) inheriting into a compact `CortexClient` while preserving 100% backwards-compatible public API.
+- **Driver:** Version tagging, release notes, and documentation synchronization for v0.3.0 release.
 - **Verification Plan:**
   - Strict Typing: `uv run mypy --strict src/` exits with code 0.
   - Automated Tests: `uv run pytest` exits with code 0.
@@ -46,9 +46,10 @@
 | [90.8] | AST Code Extractor Modularization and Language Separation | `2043d0d` | 2026-10-20 |
 | [90.9] | CLI Root Commands Extraction & Subcommand Decoupling | `5f7c741` | 2026-10-20 |
 | [90.10] | MCP Server Tools Modularization & Domain Registries | `288c87e` | 2026-10-20 |
+| [90.11] | Dual-Mode CortexClient Domain Mixin Decomposition | `b8495b3` | 2026-10-20 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] **`[99.1]` Release Hardening v0.3.0:** Version tagging, release notes, and documentation synchronization for v0.3.0.
+*(No upcoming tasks in current sprint backlog — all sprint goals addressed prior to [99.1] Release Hardening.)*
