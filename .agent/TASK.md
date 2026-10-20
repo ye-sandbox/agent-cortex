@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[99.1]`
-- **Title:** Version tagging, release notes, and documentation synchronization for v0.3.0
+- **Task ID:** `[90.9]`
+- **Title:** CLI Root Commands Extraction & Subcommand Decoupling
 - **Status:** `PLANNING`
-- **Driver:** Finalize Phase 2 and Phase 3 capabilities (AST chunking, contract drift, portfolio topology dashboard, transitive blast radius simulation, change intent simulation and automated contract patch generation) for release.
+- **Driver:** Decompose monolithic `root.py` (1,143 LOC) by extracting `search.py`, `sync.py`, `benchmark.py`, `bootstrap.py`, `serve.py`, and `status.py` into `src/cortex/cli/commands/` while maintaining 100% backwards-compatible CLI interface and zero regressions.
 - **Verification Plan:**
   - Strict Typing: `uv run mypy --strict src/` exits with code 0.
   - Automated Tests: `uv run pytest` exits with code 0.
@@ -43,12 +43,12 @@
 | [90.5] | Multi-Tenant HTTP Daemon Hardening (Constant-Time Auth & Isolation) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.6] | Upstream Template Synchronization & Knowledge Base Architecture | `f7e1a79` | 2026-10-17 |
 | [90.7] | CLI & HTTP Server Modularization and Presentation Decoupling | `05413bc` | 2026-10-19 |
+| [90.8] | AST Code Extractor Modularization and Language Separation | `2043d0d` | 2026-10-20 |
 
 ---
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] (Backlog items prioritized per roadmap)
-
-
-
+- [ ] **`[90.10]` MCP Server Tools Modularization & Domain Registries:** Decompose `mcp_server.py` (750 LOC) into `src/cortex/mcp/tools/` domain registries (`retrieval`, `graph`, `drift`, `topology`, `impact`, `evolution`, `intent`) and a clean `ServerContext`.
+- [ ] **`[90.11]` Dual-Mode CortexClient Domain Mixin Decomposition:** Decompose `client.py` (1,391 LOC) into domain mixins (`cortex/client/search.py`, `cortex/client/graph.py`, `cortex/client/drift.py`, etc.) inheriting into a compact `CortexClient`.
+- [ ] **`[99.1]` Release Hardening v0.3.0:** Version tagging, release notes, and documentation synchronization for v0.3.0.
