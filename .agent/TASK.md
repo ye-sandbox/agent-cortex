@@ -7,13 +7,15 @@
 
 ## Active Task
 
-- **Task ID:** `[03.2]`
-- **Title:** Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`)
-- **Status:** `RUNNING`
-- **Driver:** Provide an interactive standalone web spatial canvas visualization for portfolio architectural topology and dependency inspection.
-- **Implementation Commit:** `562fad5` (`feat(topology): add offline interactive dashboard`).
-- **Verification:** Dashboard and CLI topology tests (9 passed), `mypy --strict`, Ruff lint and format, and `git diff --check` passed.
-- **Pending:** Full `uv run pytest` did not finish in the existing model-dependent benchmark; wheel build awaits the declared `hatchling` backend, which is unavailable in the offline cache. Do not mark this task complete until the required checks pass.
+- **Task ID:** `[02.6]`
+- **Title:** Portfolio architectural contract evolution timeline and changelog synthesis
+- **Status:** `PLANNING`
+- **Driver:** Enable portfolio-wide tracking of contract changes, breaking modifications, and additions over time, synthesizing automated architectural changelogs across repositories.
+- **Verification Plan:**
+  - Strict Typing: `uv run mypy --strict src/` exits with code 0.
+  - Automated Tests: `uv run pytest` exits with code 0.
+  - Linters: `uv run ruff check .` and `uv run ruff format --check .` exit with code 0.
+  - Git Cleanliness: `git diff --check` exits with code 0.
 
 ---
 
@@ -31,6 +33,7 @@
 | [02.4] | Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs) | `faf1e1d` | 2026-10-19 |
 | [02.5] | Multi-repo portfolio topology visualization and dependency matrix reporting | `35183c1` | 2026-10-19 |
 | [03.1] | Cross-repository transitive blast-radius simulation and impact tracing for AI agent planning | `c734170` | 2026-10-19 |
+| [03.2] | Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`) | `562fad5` | 2026-10-20 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
@@ -43,7 +46,6 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Portfolio architectural contract evolution timeline and changelog synthesis
 - [ ] Multi-repo portfolio change intent simulation and automated contract patch generation
 
 
