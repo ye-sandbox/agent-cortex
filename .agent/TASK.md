@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[03.3]`
-- **Title:** Multi-repo portfolio change intent simulation and automated contract patch generation
-- **Status:** `RUNNING`
-- **Driver:** Enable AI agents to declare intended cross-repo architectural changes, simulate portfolio-wide drift and blast radius, and synthesize automated contract migration patches across downstream consumers.
+- **Task ID:** `[99.1]`
+- **Title:** Version tagging, release notes, and documentation synchronization for v0.3.0
+- **Status:** `PLANNING`
+- **Driver:** Finalize Phase 2 and Phase 3 capabilities (AST chunking, contract drift, portfolio topology dashboard, transitive blast radius simulation, change intent simulation and automated contract patch generation) for release.
 - **Verification Plan:**
   - Strict Typing: `uv run mypy --strict src/` exits with code 0.
   - Automated Tests: `uv run pytest` exits with code 0.
@@ -35,6 +35,7 @@
 | [02.6] | Portfolio architectural contract evolution timeline and changelog synthesis | `237c1b7` | 2026-10-20 |
 | [03.1] | Cross-repository transitive blast-radius simulation and impact tracing for AI agent planning | `c734170` | 2026-10-19 |
 | [03.2] | Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`) | `562fad5` | 2026-10-20 |
+| [03.3] | Multi-repo portfolio change intent simulation and automated contract patch generation | `b3c1d22` | 2026-10-20 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
 | [90.2] | MCP Server Dual-Mode Client Routing (`CortexClient` / `hub_url`) | `9f71111`, `8e2357e` | 2026-10-17 |
 | [90.3] | Domain Model & Contract/Tech Aggregation Deduplication | `9f71111` | 2026-10-17 |
