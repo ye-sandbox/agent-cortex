@@ -7,10 +7,10 @@
 
 ## Active Task
 
-- **Task ID:** `[02.6]`
-- **Title:** Portfolio architectural contract evolution timeline and changelog synthesis
+- **Task ID:** `[03.3]`
+- **Title:** Multi-repo portfolio change intent simulation and automated contract patch generation
 - **Status:** `PLANNING`
-- **Driver:** Enable portfolio-wide tracking of contract changes, breaking modifications, and additions over time, synthesizing automated architectural changelogs across repositories.
+- **Driver:** Enable AI agents to declare intended cross-repo architectural changes, simulate portfolio-wide drift and blast radius, and synthesize automated contract migration patches across downstream consumers.
 - **Verification Plan:**
   - Strict Typing: `uv run mypy --strict src/` exits with code 0.
   - Automated Tests: `uv run pytest` exits with code 0.
@@ -32,6 +32,7 @@
 | [02.3] | AST-based code signature extractor integration for cross-language dependency graphs | `50cc4b6` | 2026-10-19 |
 | [02.4] | Cross-repository architectural contract drift alerting (breaking changes in interfaces & APIs) | `faf1e1d` | 2026-10-19 |
 | [02.5] | Multi-repo portfolio topology visualization and dependency matrix reporting | `35183c1` | 2026-10-19 |
+| [02.6] | Portfolio architectural contract evolution timeline and changelog synthesis | `237c1b7` | 2026-10-20 |
 | [03.1] | Cross-repository transitive blast-radius simulation and impact tracing for AI agent planning | `c734170` | 2026-10-19 |
 | [03.2] | Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`) | `562fad5` | 2026-10-20 |
 | [90.1] | Config Schema Alignment, README Sync & CLI Positional Sync Target | `9f71111` | 2026-10-17 |
@@ -46,7 +47,7 @@
 
 ## Backlog (Upcoming, in priority order)
 
-- [ ] Multi-repo portfolio change intent simulation and automated contract patch generation
+- [ ] (Backlog items prioritized per roadmap)
 
 
 
