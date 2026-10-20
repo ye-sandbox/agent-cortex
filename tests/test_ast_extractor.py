@@ -1,11 +1,48 @@
 """Unit tests for AST-based code signature and dependency extraction."""
 
 from cortex.models.graph import DependencyEdgeType
+from cortex.parsers.code import (
+    BaseASTExtractor as CodeBaseASTExtractor,
+)
+from cortex.parsers.code import (
+    GolangASTExtractor as CodeGolangASTExtractor,
+)
+from cortex.parsers.code import (
+    PythonASTExtractor as CodePythonASTExtractor,
+)
+from cortex.parsers.code import (
+    TypeScriptASTExtractor as CodeTypeScriptASTExtractor,
+)
+from cortex.parsers.code import (
+    extract_code_ast as code_extract_code_ast,
+)
 from cortex.parsers.code.extractor import (
+    _PY_DUNDER_WHITELIST,
+    BaseASTExtractor,
     GolangASTExtractor,
     PythonASTExtractor,
     TypeScriptASTExtractor,
+    _node_signature_line,
+    _ts_comments,
     extract_code_ast,
+)
+from cortex.parsers.code.extractors import (
+    BaseASTExtractor as ModBaseASTExtractor,
+)
+from cortex.parsers.code.extractors import (
+    GolangASTExtractor as ModGolangASTExtractor,
+)
+from cortex.parsers.code.extractors import (
+    PythonASTExtractor as ModPythonASTExtractor,
+)
+from cortex.parsers.code.extractors import (
+    TypeScriptASTExtractor as ModTypeScriptASTExtractor,
+)
+from cortex.parsers.code.extractors import (
+    extract_code_ast as mod_extract_code_ast,
+)
+from cortex.parsers.code.extractors import (
+    node_signature_line,
 )
 
 PYTHON_SOURCE = """
@@ -95,6 +132,25 @@ func (c *Config) GetPort() int {
 """
 
 
+def test_modular_extractor_hierarchy_and_facade_parity() -> None:
+    """Verify class hierarchy and backwards-compatible facade equality."""
+    assert issubclass(PythonASTExtractor, BaseASTExtractor)
+    assert issubclass(TypeScriptASTExtractor, BaseASTExtractor)
+    assert issubclass(GolangASTExtractor, BaseASTExtractor)
+
+    # Modular package vs facade exports parity
+    assert PythonASTExtractor is ModPythonASTExtractor is CodePythonASTExtractor
+    assert TypeScriptASTExtractor is ModTypeScriptASTExtractor is CodeTypeScriptASTExtractor
+    assert GolangASTExtractor is ModGolangASTExtractor is CodeGolangASTExtractor
+    assert BaseASTExtractor is ModBaseASTExtractor is CodeBaseASTExtractor
+    assert extract_code_ast is mod_extract_code_ast is code_extract_code_ast
+
+    # Helper and constant parity
+    assert _node_signature_line is node_signature_line
+    assert callable(_ts_comments)
+    assert "__init__" in _PY_DUNDER_WHITELIST
+
+
 def test_python_ast_extractor() -> None:
     extractor = PythonASTExtractor()
     sigs, deps = extractor.extract(PYTHON_SOURCE, repo="cortex", file_path="svc.py")
@@ -121,6 +177,12 @@ def test_python_ast_extractor() -> None:
 
     data_svc = next(s for s in sigs if s.identifier == "DataService")
     assert "Service managing data storage" in data_svc.docstring
+
+
+def test_python_ast_extractor_empty_and_whitespace() -> None:
+    extractor = PythonASTExtractor()
+    assert extractor.extract("", "repo", "empty.py") == ([], [])
+    assert extractor.extract("   \n\t  ", "repo", "empty.py") == ([], [])
 
 
 def test_typescript_ast_extractor() -> None:
@@ -155,6 +217,14 @@ def test_typescript_ast_extractor() -> None:
     assert "fetchDeals" in sig_map
 
 
+def test_typescript_ast_extractor_empty_and_tsx() -> None:
+    extractor = TypeScriptASTExtractor()
+    assert extractor.extract("", "web", "empty.ts") == ([], [])
+    sigs, deps = extractor.extract("export const Button = () => <div />;", "web", "Button.tsx")
+    assert len(sigs) == 1
+    assert sigs[0].identifier == "Button"
+
+
 def test_golang_ast_extractor() -> None:
     extractor = GolangASTExtractor()
     sigs, deps = extractor.extract(GO_SOURCE, repo="backend", file_path="main.go")
@@ -177,6 +247,13 @@ def test_golang_ast_extractor() -> None:
     assert sig_map["Service"].kind == "interface"
     assert "NewConfig" in sig_map
     assert "Config.GetPort" in sig_map
+
+
+def test_golang_ast_extractor_skips_test_files_and_empty() -> None:
+    extractor = GolangASTExtractor()
+    assert extractor.extract("", "backend", "main.go") == ([], [])
+    res = extractor.extract("package main\nfunc TestX(t *testing.T) {}", "backend", "main_test.go")
+    assert res == ([], [])
 
 
 def test_extract_code_ast_dispatcher() -> None:
