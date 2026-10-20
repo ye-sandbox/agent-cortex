@@ -9,8 +9,11 @@
 
 - **Task ID:** `[03.2]`
 - **Title:** Interactive Cytoscape / Web spatial canvas dependency dashboard (`cortex topology dashboard`)
-- **Status:** `PLANNING`
+- **Status:** `RUNNING`
 - **Driver:** Provide an interactive standalone web spatial canvas visualization for portfolio architectural topology and dependency inspection.
+- **Implementation Commit:** `562fad5` (`feat(topology): add offline interactive dashboard`).
+- **Verification:** Dashboard and CLI topology tests (9 passed), `mypy --strict`, Ruff lint and format, and `git diff --check` passed.
+- **Pending:** Full `uv run pytest` did not finish in the existing model-dependent benchmark; wheel build awaits the declared `hatchling` backend, which is unavailable in the offline cache. Do not mark this task complete until the required checks pass.
 
 ---
 
