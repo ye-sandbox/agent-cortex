@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
+### Added
+- **Code AST Chunking & Extraction**: Native AST-based contract parsers for Python, TypeScript, and Go extracting exported interfaces, classes, functions, and structs with parameter and return type signatures.
+- **Cross-Language Dependency Graph**: Persistent `code_dependencies` table in LanceDB tracking cross-repository and intra-repository AST calls, symbol imports, and architectural bridges.
+- **Contract Drift Alerting**: Cross-repository breaking change detection engine classifying removals, signature changes, and deprecations into `CRITICAL`, `HIGH`, `MEDIUM`, and `INFO` severity tiers.
+- **Portfolio Topology & Coupling Metrics**: Portfolio dependency matrix and graph engine calculating Afferent Coupling ($C_a$), Efferent Coupling ($C_e$), Instability Index ($I$), cycle detection, and exports to Mermaid, Graphviz DOT, and Cytoscape JSON.
+- **Interactive Offline Topology Dashboard**: Standalone HTML/Cytoscape dashboard (`cortex topology dashboard`) with zero external network dependencies, cycle highlighting, and node/edge inspection.
+- **Transitive Blast-Radius Simulation**: Multi-hop BFS dependency impact tracer computing composite risk scores (0-100) and actionable AI planning advisories for upstream contract migrations.
+- **Contract Evolution Timeline & Changelog Synthesis**: Historical Git commit scanner and timeline engine synthesizing structured, release-oriented contract changelogs with downstream caller impact highlights.
+- **Portfolio Change Intent & Automated Patch Generation**: Intent simulation engine generating ready-to-apply `git apply` unified diffs across downstream consumer repositories for symbol renames and endpoint adjustments.
+- **Automated Background Watcher Service**: Daemonized filesystem watcher with debouncing and systemd integration (`cortex watcher`) for hands-free incremental synchronization.
+- **Hardware Profile Matrix & Benchmark Suite**: Extended embedding profiles (`code` with `jina-embeddings-v2-base-code`, `high`, `balanced`, `low`) and automated retrieval evaluation benchmark harness.
+
+### Changed
+- **Modular CLI Architecture**: Decoupled monolithic CLI into modular command groups (`cortex search`, `cortex sync`, `cortex drift`, `cortex topology`, `cortex impact`, `cortex intent`, `cortex timeline`, `cortex changelog`, `cortex watcher`, `cortex storage`).
+- **Domain-Partitioned MCP Tool Registries**: Modularized MCP server into domain-specific tool modules (`retrieval`, `drift`, `topology`, `impact`, `evolution`, `intent`, `graph`) with uniform error propagation and JSON formatting.
+- **Decomposed Dual-Mode CortexClient**: Refactored monolithic HTTP/embedded client into clean domain mixins with identical signatures across local and remote daemon modes.
+- **Multi-Tenant Server Hardening**: Dynamic DB-backed runtime configuration table (`runtime_configs`), constant-time token verification, and isolated multi-tenant config resolution.
+- **Strict AST Parser Separation**: Split language-specific extraction logic into dedicated, isolated parser modules (`python.py`, `typescript.py`, `golang.py`).
+
 ## [0.1.0] - 2026-10-17
 
 ### Added

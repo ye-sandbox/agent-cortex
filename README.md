@@ -137,9 +137,24 @@ Add to your agent's MCP configuration (`antigravity.json`, `claude_desktop_confi
 ```
 
 ### Available MCP Tools:
-- **`cortex_search(query, category?, repo?, scope?, limit?)`**: Executes hybrid search and returns snippets with `file://` links.
-- **`cortex_get_repo_contracts(repo)`**: Retrieves declared APIs (OpenAPI endpoints), services (Docker Compose), and interfaces for a repository.
-- **`cortex_list_technologies(tech_name)`**: Identifies all repositories using a specified framework or tool.
+- **Semantic Retrieval**:
+  - `cortex_search(query, category?, repo?, scope?, limit?)`: Executes hybrid search and returns snippets with `file://` links.
+  - `cortex_get_repo_contracts(repo)`: Retrieves declared APIs (OpenAPI endpoints), services (Docker Compose), and AST interfaces for a repository.
+  - `cortex_list_technologies(tech_name)`: Identifies all repositories using a specified framework or tool.
+  - `cortex_version()`: Returns active version and system identity of agent-cortex.
+- **Topology & Coupling**:
+  - `cortex_get_portfolio_topology(format?, direction?, min_weight?)`: Exports portfolio dependency graph (Mermaid, DOT, Cytoscape).
+  - `cortex_get_dependency_matrix(min_weight?)`: Returns afferent/efferent coupling metrics and instability indices.
+  - `cortex_get_code_dependencies(repo?, target_repo?, symbol?, dependency_type?, limit?)`: Queries low-level AST dependency relationships.
+- **Contract Drift & Evolution**:
+  - `cortex_get_contract_drift(repo?, breaking_only?, cross_repo_only?)`: Audits architectural drift and breaking changes across repositories.
+  - `cortex_get_contract_timeline(repo?, contract_type?, change_kind?, breaking_only?, limit?)`: Retrieves historical contract evolution timeline.
+  - `cortex_synthesize_changelog(repo?, group_by?, breaking_only?, limit?)`: Synthesizes structured markdown changelogs from contract history.
+- **Impact & Change Intent**:
+  - `cortex_simulate_blast_radius(repo, symbol?, file_path?, change_kind?, max_depth?)`: Simulates multi-hop blast radius with risk scores and agent advisories.
+  - `cortex_trace_impact(repo, symbol?, file_path?, max_depth?)`: Traces transitive callers across the portfolio dependency graph.
+  - `cortex_simulate_change_intent(...)`: Simulates migration plans and detects potential contract violations.
+  - `cortex_generate_contract_patches(...)`: Synthesizes ready-to-apply `git apply` unified diff patches for consumer repositories.
 
 ---
 

@@ -108,6 +108,16 @@ uv run cortex search "deals pagination endpoint" --category contract --limit 3
 uv run cortex search "SSE streaming retry" --json
 ```
 
+### Dashboard Interativo de Topologia
+
+Gere um arquivo HTML autocontido com o grafo de dependências do portfolio:
+
+```bash
+uv run cortex topology dashboard
+```
+
+Abra o arquivo gerado em `~/.local/share/agent-cortex/exports/topology-dashboard.html` no navegador. O dashboard opera offline e permite buscar repositórios, filtrar por peso de aresta, focar em ciclos de dependência e inspecionar detalhes de nós e arestas.
+
 ---
 
 ## 🤖 Integração via MCP (Model Context Protocol)
@@ -127,9 +137,24 @@ Adicione na configuração do seu agente (`antigravity.json`, `claude_desktop_co
 ```
 
 ### Ferramentas MCP Disponíveis:
-- **`cortex_search(query, category?, repo?, scope?, limit?)`**: Executa busca híbrida e retorna snippets com links `file://`.
-- **`cortex_get_repo_contracts(repo)`**: Recupera contratos, rotas OpenAPI e serviços Docker Compose de um repositório.
-- **`cortex_list_technologies(tech_name)`**: Identifica quais projetos utilizam determinada ferramenta ou biblioteca.
+- **Recuperação Semântica**:
+  - `cortex_search(query, category?, repo?, scope?, limit?)`: Executa busca híbrida e retorna snippets com links `file://`.
+  - `cortex_get_repo_contracts(repo)`: Recupera contratos, rotas OpenAPI, serviços Docker Compose e assinaturas AST de um repositório.
+  - `cortex_list_technologies(tech_name)`: Identifica quais projetos utilizam determinada ferramenta ou biblioteca.
+  - `cortex_version()`: Retorna a versão ativa e identidade do sistema `agent-cortex`.
+- **Topologia & Acoplamento**:
+  - `cortex_get_portfolio_topology(format?, direction?, min_weight?)`: Exporta grafo de dependência do portfólio (Mermaid, DOT, Cytoscape).
+  - `cortex_get_dependency_matrix(min_weight?)`: Retorna métricas de acoplamento aferente/eferente e índices de instabilidade.
+  - `cortex_get_code_dependencies(repo?, target_repo?, symbol?, dependency_type?, limit?)`: Consulta relações de dependência AST em baixo nível.
+- **Drift & Evolução de Contratos**:
+  - `cortex_get_contract_drift(repo?, breaking_only?, cross_repo_only?)`: Audita quebras de contrato arquitetural entre repositórios.
+  - `cortex_get_contract_timeline(repo?, contract_type?, change_kind?, breaking_only?, limit?)`: Retorna linha do tempo histórica de evolução dos contratos.
+  - `cortex_synthesize_changelog(repo?, group_by?, breaking_only?, limit?)`: Sintetiza changelog estruturado em markdown a partir do histórico de contratos.
+- **Impacto & Intenção de Mudança**:
+  - `cortex_simulate_blast_radius(repo, symbol?, file_path?, change_kind?, max_depth?)`: Simula raio de impacto multi-hop com pontuação de risco e recomendações para agentes.
+  - `cortex_trace_impact(repo, symbol?, file_path?, max_depth?)`: Rastreia chamadores transitivos no grafo de dependência do portfólio.
+  - `cortex_simulate_change_intent(...)`: Simula planos de migração e detecta potenciais violações de contrato.
+  - `cortex_generate_contract_patches(...)`: Gera patches unified diff compatíveis com `git apply` para os repositórios consumidores afetados.
 
 ---
 
