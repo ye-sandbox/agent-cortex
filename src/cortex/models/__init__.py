@@ -21,6 +21,13 @@ from cortex.models.drift import (
     ContractType,
     DriftSeverity,
 )
+from cortex.models.evolution import (
+    ArchitecturalChangelog,
+    ChangelogRelease,
+    ChangelogSection,
+    ContractEvolutionEvent,
+    ContractEvolutionTimeline,
+)
 from cortex.models.graph import (
     CodeDependency,
     CodeSignature,
@@ -57,12 +64,15 @@ from cortex.models.topology import (
 )
 
 __all__ = [
+    "ArchitecturalChangelog",
     "BlastRadiusSeverity",
     "BlastRadiusSimulationReport",
     "BlastRadiusSimulationRequest",
     "CallerChain",
     "CallerChainHop",
     "ChangeKind",
+    "ChangelogRelease",
+    "ChangelogSection",
     "ChunkCategory",
     "ChunkLifecycle",
     "ChunkScope",
@@ -71,6 +81,8 @@ __all__ = [
     "CompactSearchResult",
     "ContractDriftAlert",
     "ContractDriftReport",
+    "ContractEvolutionEvent",
+    "ContractEvolutionTimeline",
     "ContractType",
     "CrossRepoLink",
     "DependencyCycle",

@@ -7,6 +7,7 @@ import typer
 from cortex.cli.commands.config import config_app
 from cortex.cli.commands.deps import deps_app
 from cortex.cli.commands.drift import drift_app
+from cortex.cli.commands.evolution import changelog_cmd, history_app, timeline_cmd
 from cortex.cli.commands.impact import impact_app
 from cortex.cli.commands.models import models_app
 from cortex.cli.commands.root import (
@@ -42,6 +43,7 @@ __all__ = [
     "deps_app",
     "download_profile_models",
     "drift_app",
+    "history_app",
     "impact_app",
     "main",
     "models_app",
@@ -63,6 +65,7 @@ app.add_typer(deps_app, name="deps")
 app.add_typer(drift_app, name="drift")
 app.add_typer(impact_app, name="impact")
 app.add_typer(topology_app, name="topology")
+app.add_typer(history_app, name="history")
 
 
 @app.callback()
@@ -76,6 +79,8 @@ app.command(name="bootstrap")(bootstrap_cmd)
 app.command(name="sync")(sync_cmd)
 app.command(name="watch")(watch)
 app.command(name="search")(search_cmd)
+app.command(name="timeline")(timeline_cmd)
+app.command(name="changelog")(changelog_cmd)
 app.command(name="status")(status_cmd)
 app.command(name="compact")(app_compact)
 app.command(name="clean-orphans")(app_clean_orphans)

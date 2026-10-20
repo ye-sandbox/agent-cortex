@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from mcp.server.mcpserver import MCPServer
 
 from cortex.client import CortexClient
@@ -18,6 +20,10 @@ from cortex.models.chunk import (
     resolve_contract_categories,
 )
 from cortex.models.drift import ContractDriftReport
+from cortex.models.evolution import (
+    ArchitecturalChangelog,
+    ContractEvolutionTimeline,
+)
 from cortex.models.graph import (
     DependencyQueryResult,
     DependentsQueryResult,
@@ -524,6 +530,74 @@ def create_cortex_mcp_server(
             total_impacted_nodes=len(nodes),
             impacted_nodes=nodes,
             cycles_detected=cycles,
+        )
+
+    @server.tool(
+        name="cortex_get_contract_timeline",
+        description=(
+            "Retrieve chronological history of architectural contract mutations across "
+            "repositories, optionally filtering by repo, contract type, or breaking severity."
+        ),
+    )
+    def cortex_get_contract_timeline(
+        repo: str | None = None,
+        contract_type: str | None = None,
+        change_kind: str | None = None,
+        breaking_only: bool = False,
+        limit: int = 100,
+    ) -> ContractEvolutionTimeline:
+        """Query contract evolution timeline."""
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            return remote_client.get_contract_timeline(
+                repo=repo,
+                contract_type=contract_type,
+                change_kind=change_kind,
+                breaking_only=breaking_only,
+                limit=limit,
+            )
+
+        client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+        return client.get_contract_timeline(
+            repo=repo,
+            contract_type=contract_type,
+            change_kind=change_kind,
+            breaking_only=breaking_only,
+            limit=limit,
+        )
+
+    @server.tool(
+        name="cortex_synthesize_changelog",
+        description=(
+            "Synthesize structured portfolio architectural changelog from contract mutations, "
+            "highlighting breaking changes, deprecations, and affected downstream repositories."
+        ),
+    )
+    def cortex_synthesize_changelog(
+        repo: str | None = None,
+        group_by: str = "release",
+        breaking_only: bool = False,
+        limit: int = 200,
+    ) -> ArchitecturalChangelog:
+        """Synthesize portfolio architectural contract changelog."""
+        group_key: Literal["release", "date", "repo"] = (
+            "date" if group_by == "date" else ("repo" if group_by == "repo" else "release")
+        )
+        remote_client = get_remote_client()
+        if remote_client is not None:
+            return remote_client.synthesize_changelog(
+                repo=repo,
+                group_by=group_key,
+                breaking_only=breaking_only,
+                limit=limit,
+            )
+
+        client = CortexClient(config=get_config(), mode="in_process", storage=get_storage())
+        return client.synthesize_changelog(
+            repo=repo,
+            group_by=group_key,
+            breaking_only=breaking_only,
+            limit=limit,
         )
 
     return server

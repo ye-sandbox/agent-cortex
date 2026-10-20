@@ -127,6 +127,29 @@ Runtime configuration can be persisted and managed dynamically without daemon re
   - MCP: `cortex_simulate_blast_radius(repo, symbol, file_path, change_kind, max_depth)`, `cortex_trace_impact(repo, symbol, file_path, max_depth)`.
   - HTTP Server & Client: `POST /impact/simulate`, `GET /impact/simulate`, `GET /impact/trace`, and `CortexClient.simulate_blast_radius()`, `CortexClient.trace_impact()`.
 
+### 9. Contract Evolution Timeline & Changelog Synthesis Contracts
+
+- **Evolution Event Identification & Storage:**
+  - Table: Embedded LanceDB table `contract_evolution` located in `storage.data_dir`.
+  - Deterministic ID: `{repo}:{commit_sha[:12]}:{contract_type}:{change_kind}:{slug}`
+  - Schema captures: `repo`, `commit_sha`, `commit_date`, `author`, `version_tag`, `contract_type`, `change_kind`, `severity`, `identifier`, `file_path`, `summary`, `details`, `impacted_repos`, `impacted_callers`.
+- **Automatic Ingestion Drift Recording:**
+  - `IngestionEngine.sync_repository()` automatically records detected `drift_alerts` as evolution events tagged with target commit SHA, author, and timestamp.
+- **Git History Backfill:**
+  - `ContractEvolutionEngine.scan_git_history(repo_path, max_commits, since_commit)` parses commit log history, diffing contract revisions across parent-child commits and associating Git tags.
+- **Changelog Grouping & Synthesis:**
+  - Groups events by `release` (version tag / commit), `date` (YYYY-MM-DD), or `repo`.
+  - Categorizes mutations into standardized sections:
+    - 🚨 Breaking Changes (`CRITICAL` and `HIGH` severity)
+    - ⚠️ Deprecations (`DEPRECATED`)
+    - ✨ Additions & Enhancements (`ADDED`)
+    - 🔄 Contract Modifications (`MODIFIED` non-breaking)
+  - Explicit downstream impact callouts highlighting required updates in consumer repositories.
+- **Dual-Mode Interfaces:**
+  - CLI: `cortex timeline [REPO]` (`--type`, `--kind`, `--breaking-only`, `--since`, `--until`, `--limit`, `--json`), `cortex changelog [REPO]` (`--group-by`, `--breaking-only`, `--format`, `--output`, `--limit`, `--json`), `cortex history scan [REPO]` (`--max-commits`, `--since-commit`, `--json`).
+  - MCP: `cortex_get_contract_timeline(repo, contract_type, change_kind, breaking_only, limit)`, `cortex_synthesize_changelog(repo, group_by, breaking_only, limit)`.
+  - HTTP Server & Client: `GET /timeline`, `GET /changelog`, `POST /history/scan`, and `CortexClient.get_contract_timeline()`, `CortexClient.synthesize_changelog()`.
+
 ---
 
 ## Gotchas & Pitfalls

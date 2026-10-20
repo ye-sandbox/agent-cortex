@@ -12,6 +12,14 @@ from cortex.models.chunk import (
     ChunkScope,
     DocumentChunk,
 )
+from cortex.models.drift import (
+    ChangeKind,
+    ContractType,
+    DriftSeverity,
+)
+from cortex.models.evolution import (
+    ContractEvolutionEvent,
+)
 from cortex.models.graph import (
     CodeDependency,
     CodeSignature,
@@ -201,4 +209,69 @@ def record_to_dependency(record: dict[str, Any] | LanceModel) -> CodeDependency:
         target_repo=target_repo,
         line_number=int(data.get("line_number", 1)),
         raw_statement=str(data.get("raw_statement", "")),
+    )
+
+
+class ContractEvolutionRecord(LanceModel):
+    """LanceDB storage schema for ContractEvolutionEvent records."""
+
+    id: str
+    repo: str
+    commit_sha: str
+    commit_date: str
+    author: str
+    version_tag: str
+    contract_type: str
+    change_kind: str
+    severity: str
+    identifier: str
+    file_path: str
+    summary: str
+    details: str
+    impacted_repos: list[str]
+    impacted_callers: list[str]
+
+
+def evolution_to_record_dict(event: ContractEvolutionEvent) -> dict[str, Any]:
+    """Convert ContractEvolutionEvent to record dictionary for LanceDB."""
+    return {
+        "id": event.id,
+        "repo": event.repo,
+        "commit_sha": event.commit_sha,
+        "commit_date": event.commit_date,
+        "author": event.author,
+        "version_tag": event.version_tag or "",
+        "contract_type": event.contract_type.value,
+        "change_kind": event.change_kind.value,
+        "severity": event.severity.value,
+        "identifier": event.identifier,
+        "file_path": event.file_path,
+        "summary": event.summary,
+        "details": event.details,
+        "impacted_repos": list(event.impacted_repos),
+        "impacted_callers": list(event.impacted_callers),
+    }
+
+
+def record_to_evolution(record: dict[str, Any] | LanceModel) -> ContractEvolutionEvent:
+    """Convert storage record back to ContractEvolutionEvent domain entity."""
+    data: dict[str, Any] = record.model_dump() if isinstance(record, LanceModel) else dict(record)
+    version_tag_raw = data.get("version_tag")
+    version_tag = str(version_tag_raw) if version_tag_raw else None
+    return ContractEvolutionEvent(
+        id=str(data["id"]),
+        repo=str(data["repo"]),
+        commit_sha=str(data["commit_sha"]),
+        commit_date=str(data.get("commit_date", "")),
+        author=str(data.get("author", "")),
+        version_tag=version_tag,
+        contract_type=ContractType(str(data["contract_type"])),
+        change_kind=ChangeKind(str(data["change_kind"])),
+        severity=DriftSeverity(str(data["severity"])),
+        identifier=str(data["identifier"]),
+        file_path=str(data.get("file_path", "")),
+        summary=str(data["summary"]),
+        details=str(data.get("details", "")),
+        impacted_repos=[str(r) for r in data.get("impacted_repos", [])],
+        impacted_callers=[str(c) for c in data.get("impacted_callers", [])],
     )

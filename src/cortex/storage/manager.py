@@ -17,14 +17,18 @@ from lancedb.table import Table
 from pydantic import BaseModel, ConfigDict, Field
 
 from cortex.models.chunk import DocumentChunk
+from cortex.models.evolution import ContractEvolutionEvent
 from cortex.models.graph import CodeDependency, CodeSignature
 from cortex.storage.schema import (
     CodeDependencyRecord,
     CodeSignatureRecord,
+    ContractEvolutionRecord,
     chunk_to_record_dict,
     create_chunk_record_model,
     dependency_to_record_dict,
+    evolution_to_record_dict,
     record_to_dependency,
+    record_to_evolution,
     record_to_signature,
     signature_to_record_dict,
 )
@@ -407,6 +411,56 @@ class StorageManager:
             builder = builder.limit(limit)
         records = builder.to_list()
         return [record_to_dependency(r) for r in records]
+
+    def get_or_create_evolution_table(self, name: str = "contract_evolution") -> Table:
+        """Retrieve existing or create new table for ContractEvolutionEvent records."""
+        if name in self.table_names():
+            return self._db.open_table(name)
+        return self._db.create_table(name, schema=ContractEvolutionRecord)
+
+    def upsert_evolution_events(
+        self,
+        events: Sequence[ContractEvolutionEvent],
+        table_name: str = "contract_evolution",
+    ) -> int:
+        """Upsert contract evolution events into LanceDB using deterministic IDs."""
+        if not events:
+            return 0
+        tbl = self.get_or_create_evolution_table(name=table_name)
+        records = [evolution_to_record_dict(e) for e in events]
+        (
+            tbl.merge_insert("id")
+            .when_matched_update_all()
+            .when_not_matched_insert_all()
+            .execute(records)
+        )
+        return len(events)
+
+    def get_evolution_events(
+        self,
+        where: str | None = None,
+        limit: int | None = None,
+        table_name: str = "contract_evolution",
+    ) -> list[ContractEvolutionEvent]:
+        """Query contract evolution events with optional SQL filter and limit."""
+        if table_name not in self.table_names():
+            return []
+        tbl = self._db.open_table(table_name)
+        builder = tbl.search()
+        if where:
+            builder = builder.where(where)
+        if limit is not None:
+            builder = builder.limit(limit)
+        records = builder.to_list()
+        return [record_to_evolution(r) for r in records]
+
+    def delete_evolution_by_repo(self, repo: str, table_name: str = "contract_evolution") -> None:
+        """Delete all evolution events belonging to a repository."""
+        if table_name not in self.table_names():
+            return
+        tbl = self._db.open_table(table_name)
+        safe_repo = repo.replace("'", "''")
+        tbl.delete(f"repo = '{safe_repo}'")
 
     def count_chunks(self, table_name: str = "chunks", where: str | None = None) -> int:
         """Count rows in target table, optionally matching a SQL where filter."""

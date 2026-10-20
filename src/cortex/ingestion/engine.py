@@ -22,6 +22,7 @@ from cortex.storage.manager import StorageManager
 
 if TYPE_CHECKING:
     from cortex.retrieval.drift import ContractDriftEngine
+    from cortex.retrieval.evolution import ContractEvolutionEngine
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,7 @@ class IngestionEngine:
         embedding_engine: EmbeddingEngine,
         manifest_manager: ManifestManager | None = None,
         drift_engine: ContractDriftEngine | None = None,
+        evolution_engine: ContractEvolutionEngine | None = None,
         batch_size: int = 32,
     ) -> None:
         """Initialize ingestion engine with storage, embedding, manifest, and drift engines."""
@@ -49,6 +51,14 @@ class IngestionEngine:
                 manifest_manager=self.manifest,
             )
         self.drift_engine = drift_engine
+        if evolution_engine is None:
+            from cortex.retrieval.evolution import ContractEvolutionEngine
+
+            evolution_engine = ContractEvolutionEngine(
+                storage_manager=self.storage,
+                drift_engine=self.drift_engine,
+            )
+        self.evolution_engine = evolution_engine
         self.batch_size = batch_size
 
     @classmethod
@@ -142,6 +152,28 @@ class IngestionEngine:
             for alert in drift_alerts:
                 if alert.severity.is_breaking:
                     logger.warning("Breaking contract drift in '%s': %s", name, alert.summary)
+            if drift_alerts and target_commit:
+                author = ""
+                commit_date = ""
+                try:
+                    from cortex.ingestion.git import run_git
+
+                    meta = run_git(
+                        path, ["log", "-1", "--format=%an|%cI", target_commit], check=False
+                    )
+                    if meta and "|" in meta:
+                        parts = meta.split("|", 1)
+                        author = parts[0].strip()
+                        commit_date = parts[1].strip()
+                except Exception:  # noqa: S110
+                    pass
+                self.evolution_engine.record_alerts(
+                    repo=name,
+                    commit_sha=target_commit,
+                    alerts=drift_alerts,
+                    author=author,
+                    commit_date=commit_date or None,
+                )
         except Exception as exc:  # noqa: BLE001
             logger.debug("Failed to inspect contract drift for '%s': %s", name, exc)
 

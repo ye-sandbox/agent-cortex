@@ -21,11 +21,13 @@ from cortex.ingestion.discovery import resolve_sync_sources
 from cortex.ingestion.engine import IngestionEngine
 from cortex.ingestion.watcher import RepoWatcher, WatcherConfig
 from cortex.retrieval.drift import ContractDriftEngine
+from cortex.retrieval.evolution import ContractEvolutionEngine
 from cortex.retrieval.pipeline import HybridRetrievalPipeline
 from cortex.server.context import ServerContext
 from cortex.server.middleware import BearerAuthMiddleware
 from cortex.server.routes.config import create_config_routes
 from cortex.server.routes.drift import create_drift_routes
+from cortex.server.routes.evolution import create_evolution_routes
 from cortex.server.routes.graph import create_graph_routes
 from cortex.server.routes.health import create_health_routes
 from cortex.server.routes.impact import create_impact_routes
@@ -38,6 +40,7 @@ from cortex.storage.manager import StorageManager
 __all__ = [
     "BearerAuthMiddleware",
     "ContractDriftEngine",
+    "ContractEvolutionEngine",
     "IngestionEngine",
     "RepoWatcher",
     "ServerContext",
@@ -70,6 +73,7 @@ def create_app(
         *create_search_routes(ctx),
         *create_graph_routes(ctx),
         *create_drift_routes(ctx),
+        *create_evolution_routes(ctx),
         *create_impact_routes(ctx),
         *create_topology_routes(ctx),
         *create_sync_routes(ctx),
