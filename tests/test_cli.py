@@ -484,3 +484,63 @@ def test_cli_search_with_remote_options() -> None:
         _, kwargs = mock_client_cls.call_args
         assert kwargs["mode"] == "remote"
         assert kwargs["hub_url"] == "http://hub:8000"
+
+
+def test_cli_commands_modular_parity() -> None:
+    """Verify that commands exported by decoupled modules match root.py and package facade."""
+    from cortex.cli.commands import (
+        benchmark_cmd as pkg_benchmark,
+    )
+    from cortex.cli.commands import (
+        bootstrap_cmd as pkg_bootstrap,
+    )
+    from cortex.cli.commands import (
+        mcp_server_cmd as pkg_mcp,
+    )
+    from cortex.cli.commands import (
+        search_cmd as pkg_search,
+    )
+    from cortex.cli.commands import (
+        serve_cmd as pkg_serve,
+    )
+    from cortex.cli.commands import (
+        status_cmd as pkg_status,
+    )
+    from cortex.cli.commands import (
+        sync_cmd as pkg_sync,
+    )
+    from cortex.cli.commands.benchmark import benchmark_cmd
+    from cortex.cli.commands.bootstrap import bootstrap_cmd
+    from cortex.cli.commands.root import (
+        benchmark_cmd as root_benchmark,
+    )
+    from cortex.cli.commands.root import (
+        bootstrap_cmd as root_bootstrap,
+    )
+    from cortex.cli.commands.root import (
+        mcp_server_cmd as root_mcp,
+    )
+    from cortex.cli.commands.root import (
+        search_cmd as root_search,
+    )
+    from cortex.cli.commands.root import (
+        serve_cmd as root_serve,
+    )
+    from cortex.cli.commands.root import (
+        status_cmd as root_status,
+    )
+    from cortex.cli.commands.root import (
+        sync_cmd as root_sync,
+    )
+    from cortex.cli.commands.search import search_cmd
+    from cortex.cli.commands.serve import mcp_server_cmd, serve_cmd
+    from cortex.cli.commands.status import status_cmd
+    from cortex.cli.commands.sync import sync_cmd
+
+    assert bootstrap_cmd is root_bootstrap is pkg_bootstrap
+    assert sync_cmd is root_sync is pkg_sync
+    assert search_cmd is root_search is pkg_search
+    assert status_cmd is root_status is pkg_status
+    assert benchmark_cmd is root_benchmark is pkg_benchmark
+    assert serve_cmd is root_serve is pkg_serve
+    assert mcp_server_cmd is root_mcp is pkg_mcp
