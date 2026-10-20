@@ -14,6 +14,7 @@ import cortex.cli
 from cortex.cli.common import console
 from cortex.client import ClientMode
 from cortex.config.loader import load_config
+from cortex.dashboard import render_dashboard
 from cortex.models.topology import PortfolioTopologyGraph
 
 topology_app = typer.Typer(
@@ -220,6 +221,66 @@ def topology_graph(
             console.print_json(content_str)
         else:
             console.print(content_str)
+
+
+@topology_app.command(name="dashboard")
+def topology_dashboard(
+    output: Annotated[
+        Path | None,
+        typer.Option(
+            "--output", "-o", help="Destination HTML file (defaults outside the Git tree)."
+        ),
+    ] = None,
+    min_weight: Annotated[
+        int,
+        typer.Option("--min-weight", "-w", min=1, help="Minimum indexed edge weight."),
+    ] = 1,
+    include_internal: Annotated[
+        bool,
+        typer.Option("--include-internal", help="Include intra-repository dependencies."),
+    ] = False,
+    remote: Annotated[
+        bool,
+        typer.Option("--remote", help="Force querying remote daemon instead of local LanceDB."),
+    ] = False,
+    hub_url: Annotated[
+        str | None,
+        typer.Option("--hub-url", help="Override remote hub URL."),
+    ] = None,
+    api_key: Annotated[
+        str | None,
+        typer.Option("--api-key", help="Override remote Bearer token."),
+    ] = None,
+    config_path: Annotated[
+        Path | None,
+        typer.Option("--config-path", "-c", help="Custom configuration path."),
+    ] = None,
+) -> None:
+    """Write a self-contained interactive portfolio topology dashboard."""
+    cfg = load_config(config_path)
+    mode: ClientMode = "remote" if remote else "auto"
+    try:
+        with cortex.cli.CortexClient(
+            mode=mode, hub_url=hub_url, api_key=api_key, config=cfg
+        ) as client:
+            graph = client.get_portfolio_topology(
+                format="json",
+                include_internal=include_internal,
+                min_weight=min_weight,
+            )
+        if not isinstance(graph, PortfolioTopologyGraph):
+            raise TypeError("Topology client returned an unexpected graph format")
+        destination = (
+            output.expanduser().resolve()
+            if output is not None
+            else (Path.home() / ".local/share/agent-cortex/exports/topology-dashboard.html")
+        )
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_text(render_dashboard(graph), encoding="utf-8")
+    except (OSError, TypeError, ValueError, RuntimeError) as exc:
+        console.print(f"[bold red]Failed to create topology dashboard:[/bold red] {exc}")
+        raise typer.Exit(code=1) from exc
+    console.print(f"[bold green]Topology dashboard written to:[/bold green] {destination}")
 
 
 @topology_app.command(name="cycles")

@@ -426,7 +426,8 @@ class PortfolioTopologyEngine:
         lines.append("}")
         return "\n".join(lines)
 
-    def export_cytoscape(self, graph: PortfolioTopologyGraph) -> dict[str, Any]:
+    @staticmethod
+    def export_cytoscape(graph: PortfolioTopologyGraph) -> dict[str, Any]:
         """Generate Cytoscape.js standard JSON elements structure."""
         cycle_repos: set[str] = set()
         for c in graph.cycles:

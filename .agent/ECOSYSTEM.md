@@ -35,7 +35,8 @@
     - `cortex_get_code_signatures(query: str, repo?: str, kind?: str, language?: str, limit?: int)`: AST code contracts and signatures.
     - `cortex_get_contract_drift(repo?: str, breaking_only?: bool, cross_repo_only?: bool)`: Audits architectural contract drift and breaking changes across repositories.
 - **CLI Contract (`cortex`):**
-  - Commands: `cortex bootstrap`, `cortex models`, `cortex search`, `cortex sync`, `cortex watch`, `cortex status`, `cortex deps`, `cortex drift`.
+  - Commands: `cortex bootstrap`, `cortex models`, `cortex search`, `cortex sync`, `cortex watch`, `cortex status`, `cortex deps`, `cortex drift`, `cortex topology dashboard`.
+  - `cortex topology dashboard` writes an offline HTML snapshot of the existing topology graph; default destination is external to the checkout at `~/.local/share/agent-cortex/exports/topology-dashboard.html`.
   - Flag Invariant: `--json` MUST output strictly valid NDJSON/JSON for programmatic ingestion by agent subshells.
 - **Dual-Mode Transport Contract:**
   - Local mode: Embedded LanceDB + in-process FastEmbed ONNX.

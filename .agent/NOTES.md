@@ -98,6 +98,7 @@ Runtime configuration can be persisted and managed dynamically without daemon re
   - Cytoscape JSON: Standard `{"elements": {"nodes": [...], "edges": [...]}}`.
 - **Dual-Mode Interfaces:**
   - CLI: `cortex topology matrix` (`--min-weight`, `--highlight-cycles`, `--json`), `cortex topology graph` (`--format`, `--direction`, `--output`), `cortex topology cycles` (`--fail-on-cycles`).
+  - Offline Dashboard: `cortex topology dashboard` renders the existing Cytoscape topology export into a self-contained HTML snapshot with embedded Cytoscape.js. Default output resides outside the public checkout; embedded graph JSON escapes HTML-sensitive characters.
   - MCP: `cortex_get_portfolio_topology(format, direction, min_weight)`, `cortex_get_dependency_matrix(min_weight)`.
   - HTTP Server & Client: `GET /topology/graph`, `GET /topology/matrix`, `GET /topology/cycles`, and `CortexClient` methods.
 

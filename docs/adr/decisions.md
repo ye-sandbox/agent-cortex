@@ -141,3 +141,11 @@ type: architectural-decision-log
     - HTTP Server & Dual-Mode Client: `GET /topology/graph`, `GET /topology/matrix`, `GET /topology/cycles`, and `CortexClient` methods.
     - MCP Server: Tools `cortex_get_portfolio_topology` and `cortex_get_dependency_matrix`.
 - **Consequences:** Instant, zero-overhead visualization of organization-wide microservice and tool topologies; automated prevention of circular dependencies in CI/CD pipelines; full compatibility with Markdown previews, Graphviz tools, and web canvas interfaces.
+
+---
+
+### 2026-10-19 — ADR-010: Offline Topology Dashboard Snapshots
+
+- **Context:** Engineers need to inspect the exported portfolio topology interactively without running a web service or exposing indexed graph data to a CDN.
+- **Decision:** Add `cortex topology dashboard` as a snapshot export. It uses the existing `PortfolioTopologyGraph` and Cytoscape element schema, embeds a pinned Cytoscape.js browser asset and escaped graph JSON in one HTML file, and writes by default to `~/.local/share/agent-cortex/exports/`. Local and remote graph retrieval both use `CortexClient`.
+- **Consequences:** The generated dashboard works offline with zero process overhead at rest. The packaged browser asset adds roughly 436 KB uncompressed to the distribution. Snapshots must be regenerated after topology changes, and their destination should remain outside public source repositories.

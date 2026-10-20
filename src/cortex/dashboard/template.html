@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:">
+  <title>Portfolio topology · agent-cortex</title>
+  <style>
+    :root { color-scheme: light dark; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; font-size: 14px; line-height: 1.45; --bg: #f4f6fa; --panel: #fff; --canvas: #eef3fa; --text: #182536; --secondary: #4c5e73; --border: #d4deea; --surface: #edf2f8; --control: #fff; --accent: #1e61bb; --focus: #1769d1; --button: #e8f0fc; --button-hover: #d8e8ff; --hint: #eaf2fc; }
+    @media (prefers-color-scheme: dark) { :root { --bg: #101722; --panel: #182232; --canvas: #111c2c; --text: #eef3fa; --secondary: #b1c0d2; --border: #34455b; --surface: #233247; --control: #1d2b3e; --accent: #94bfff; --focus: #94bfff; --button: #2b4160; --button-hover: #385779; --hint: #23364f; } }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-height: 100vh; background: var(--bg); color: var(--text); }
+    .shell { display: grid; grid-template-columns: 288px minmax(0, 1fr) 320px; height: 100vh; min-height: 620px; }
+    .sidebar, .details { background: var(--panel); padding: 24px; overflow-y: auto; }
+    .sidebar { border-right: 1px solid var(--border); }
+    .details { border-left: 1px solid var(--border); }
+    .brand { color: var(--accent); font-size: 12px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
+    h1 { font-size: 28px; line-height: 1.15; margin: 10px 0 8px; letter-spacing: -.02em; }
+    h2 { font-size: 18px; margin: 0 0 12px; overflow-wrap: anywhere; }
+    h3 { font-size: 12px; color: var(--secondary); margin: 24px 0 9px; text-transform: uppercase; letter-spacing: .07em; }
+    p { color: var(--secondary); margin: 0 0 12px; line-height: 1.5; }
+    label { display: block; color: var(--text); font-weight: 600; margin: 0 0 8px; }
+    input, select, button { font: inherit; }
+    input[type="search"], input[type="number"], select { width: 100%; min-height: 44px; padding: 10px 12px; color: var(--text); background: var(--control); border: 1px solid var(--border); border-radius: 10px; }
+    :is(input, select, button):focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+    input[type="range"], input[type="checkbox"] { accent-color: var(--accent); }
+    input[type="range"] { width: 100%; height: 44px; margin: 0; cursor: pointer; }
+    .weight-row { display: grid; grid-template-columns: minmax(0, 1fr) 68px; gap: 10px; align-items: center; }
+    .field { margin-top: 22px; }
+    .field-help { color: var(--secondary); font-size: 12px; margin: 7px 0 0; }
+    .check { display: flex; gap: 10px; align-items: center; min-height: 44px; margin-top: 12px; }
+    .check input { width: 18px; height: 18px; margin: 0; }
+    .check label { margin: 0; cursor: pointer; }
+    button { min-height: 44px; border: 1px solid var(--border); border-radius: 10px; background: var(--button); color: var(--text); padding: 10px 14px; font-weight: 600; cursor: pointer; }
+    button:hover { background: var(--button-hover); }
+    .actions { display: flex; gap: 8px; margin-top: 18px; }
+    .actions button { flex: 1; }
+    .canvas-wrap { position: relative; min-height: 0; background: var(--canvas); }
+    #cy { width: 100%; height: 100%; }
+    .canvas-note { position: absolute; left: 20px; bottom: 20px; max-width: calc(100% - 40px); color: var(--text); font-size: 12px; background: var(--panel); border: 1px solid var(--border); padding: 9px 12px; border-radius: 9px; pointer-events: none; }
+    .empty-graph { position: absolute; inset: 0; display: grid; place-content: center; padding: 30px; text-align: center; pointer-events: none; }
+    .empty-graph h2 { margin-bottom: 8px; }
+    .empty-graph[hidden] { display: none; }
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; margin-top: 22px; }
+    .stat { background: var(--surface); border-radius: 10px; padding: 12px; }
+    .stat strong { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+    .stat span { color: var(--secondary); font-size: 12px; }
+    .section-heading { margin: 26px 0 10px; font-size: 14px; }
+    .repo-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--border); border-radius: 10px; }
+    .repo-list li + li { border-top: 1px solid var(--border); }
+    .repo-list button { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; min-height: 44px; border: 0; border-radius: 0; background: transparent; text-align: left; font-weight: 500; overflow-wrap: anywhere; }
+    .repo-list button:hover, .repo-list button[aria-current="true"] { background: var(--surface); }
+    .repo-list .badge { flex: none; color: var(--secondary); font-size: 11px; }
+    .metric { display: flex; justify-content: space-between; gap: 10px; border-bottom: 1px solid var(--border); padding: 12px 0; color: var(--secondary); }
+    .metric strong { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { background: var(--surface); border-radius: 999px; padding: 6px 10px; font-size: 12px; overflow-wrap: anywhere; }
+    .empty { color: var(--secondary); font-style: italic; }
+    .hint { margin-top: 22px; padding: 12px; border-left: 3px solid var(--accent); background: var(--hint); border-radius: 0 8px 8px 0; }
+    @media (max-width: 1050px) { .shell { grid-template-columns: 260px minmax(0, 1fr); height: auto; min-height: 100vh; } .canvas-wrap { min-height: 620px; } .details { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--border); } }
+    @media (max-width: 650px) { .shell { display: flex; flex-direction: column; } .sidebar { border-right: 0; border-bottom: 1px solid var(--border); } .canvas-wrap { height: 55vh; min-height: 360px; } .details { border-top: 1px solid var(--border); } }
+    @media (prefers-contrast: more) { :root { --border: #5e6c7c; } button, input, select { border-width: 2px; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <aside class="sidebar" aria-label="Topology controls">
+      <div class="brand">agent-cortex / topology</div>
+      <h1>Portfolio map</h1>
+      <p>Explore indexed dependencies. Arrows point from the repository using a contract to the repository providing it.</p>
+      <div class="stats" aria-label="Portfolio summary">
+        <div class="stat"><strong id="repo-count">0</strong><span>repositories</span></div>
+        <div class="stat"><strong id="edge-count">0</strong><span>dependencies</span></div>
+        <div class="stat"><strong id="ref-count">0</strong><span>references</span></div>
+        <div class="stat"><strong id="cycle-count">0</strong><span>cycles</span></div>
+      </div>
+      <div class="field">
+        <label for="search">Find repository</label>
+        <input id="search" type="search" placeholder="Search by name" autocomplete="off" aria-controls="repo-list">
+      </div>
+      <div class="field">
+        <label for="weight">Minimum references per dependency</label>
+        <div class="weight-row">
+          <input id="weight" type="range" min="1" value="1" aria-describedby="weight-help">
+          <input id="weight-number" type="number" min="1" value="1" aria-label="Minimum references per dependency" aria-describedby="weight-help">
+        </div>
+        <p class="field-help" id="weight-help">Hide arrows with fewer references.</p>
+      </div>
+      <div class="field">
+        <label for="layout">Graph layout</label>
+        <select id="layout">
+          <option value="cose">Organic</option>
+          <option value="breadthfirst">Hierarchy</option>
+          <option value="circle">Circle</option>
+          <option value="grid">Grid</option>
+        </select>
+      </div>
+      <div class="check"><input id="cycles-only" type="checkbox"><label for="cycles-only">Focus on cycles</label></div>
+      <div class="actions"><button id="fit" type="button">Fit graph</button><button id="reset" type="button">Reset</button></div>
+      <h2 class="section-heading">Repositories</h2>
+      <ul class="repo-list" id="repo-list" aria-label="Repository results"></ul>
+      <p class="field-help" id="list-status" role="status" aria-live="polite"></p>
+      <p class="hint">Select a repository from the list or graph to inspect it. Drag to pan and scroll to zoom.</p>
+    </aside>
+    <section class="canvas-wrap" aria-label="Interactive dependency graph">
+      <div id="cy" role="img" aria-label="Visual portfolio dependency graph. Use the repository list to browse with a keyboard."></div>
+      <div class="empty-graph" id="empty-graph" hidden><div><h2>No repositories indexed</h2><p>Sync repositories, then generate this dashboard again.</p></div></div>
+      <div class="canvas-note" id="canvas-note" aria-hidden="true">Select a repository to inspect its neighbors</div>
+    </section>
+    <aside class="details" aria-label="Selected item details">
+      <h2 id="detail-title" aria-live="polite">Topology details</h2>
+      <p id="detail-description">Select a repository or dependency arrow to inspect its metrics.</p>
+      <div id="detail-body"></div>
+    </aside>
+  </main>
+  <!-- CORTEX_VENDOR -->
+  <!-- CORTEX_PAYLOAD -->
+  <script>
+    (() => {
+      const payload = JSON.parse(document.getElementById('cortex-data').textContent);
+      const topology = payload.topology;
+      const nodeData = topology.elements.nodes;
+      const edgeData = topology.elements.edges;
+      const byId = id => document.getElementById(id);
+      const text = value => String(value ?? '');
+      const appearance = window.matchMedia('(prefers-color-scheme: dark)');
+      const cycleEdges = new Set();
+      for (const path of payload.cycles) {
+        for (let i = 0; i < path.length - 1; i++) cycleEdges.add(`${path[i]}->${path[i + 1]}`);
+      }
+      edgeData.forEach(edge => { edge.data.in_cycle = cycleEdges.has(edge.data.id); });
+      byId('repo-count').textContent = text(topology.meta.total_repos);
+      byId('edge-count').textContent = text(topology.meta.total_edges);
+      byId('ref-count').textContent = text(edgeData.reduce((sum, edge) => sum + edge.data.weight, 0));
+      byId('cycle-count').textContent = text(payload.cycles.length);
+      const maxWeight = Math.max(1, ...edgeData.map(edge => edge.data.weight));
+      byId('weight').max = text(maxWeight);
+      byId('weight-number').max = text(maxWeight);
+      byId('empty-graph').hidden = nodeData.length !== 0;
+
+      function graphStyle() {
+        const dark = appearance.matches;
+        const node = dark ? '#679df4' : '#2865b6';
+        const label = dark ? '#ecf3ff' : '#182536';
+        const edge = dark ? '#8ca8cb' : '#597493';
+        const cycle = dark ? '#ed915b' : '#a74416';
+        return [
+          { selector: 'node', style: { 'background-color': node, 'label': 'data(label)', 'color': label, 'font-size': 12, 'font-weight': 600, 'text-wrap': 'wrap', 'text-max-width': 120, 'text-valign': 'bottom', 'text-margin-y': 9, 'width': 40, 'height': 40, 'border-width': 2, 'border-color': dark ? '#c7dcfc' : '#153f75' } },
+          { selector: 'node[?in_cycle]', style: { 'background-color': cycle, 'border-color': dark ? '#ffd2ab' : '#78300c' } },
+          { selector: 'edge', style: { 'width': maxWeight === 1 ? 3 : 'mapData(weight, 1, ' + maxWeight + ', 2, 7)', 'line-color': edge, 'target-arrow-color': edge, 'target-arrow-shape': 'triangle', 'curve-style': 'bezier', 'arrow-scale': 1.1, 'opacity': 0.9 } },
+          { selector: 'edge[?in_cycle]', style: { 'line-color': cycle, 'target-arrow-color': cycle } },
+          { selector: '.faded', style: { 'opacity': 0.2, 'text-opacity': 0.2 } },
+          { selector: '.focused', style: { 'opacity': 1, 'text-opacity': 1, 'overlay-color': dark ? '#b8d3ff' : '#175bbb', 'overlay-opacity': 0.2, 'overlay-padding': 10 } }
+        ];
+      }
+
+      const cy = cytoscape({
+        container: byId('cy'),
+        elements: topology.elements,
+        layout: { name: 'cose', animate: false, fit: true, padding: 40 },
+        minZoom: 0.1,
+        maxZoom: 4,
+        wheelSensitivity: 0.25,
+        style: graphStyle()
+      });
+      appearance.addEventListener('change', () => cy.style(graphStyle()));
+
+      const details = byId('detail-body');
+      let selectedRepo = null;
+      function clearDetails() { details.replaceChildren(); }
+      function addMetric(label, value) {
+        const row = document.createElement('div'); row.className = 'metric';
+        const name = document.createElement('span'); name.textContent = label;
+        const data = document.createElement('strong'); data.textContent = text(value);
+        row.append(name, data); details.append(row);
+      }
+      function addChips(label, values) {
+        const heading = document.createElement('h3'); heading.textContent = label; details.append(heading);
+        if (!values || !values.length) { const empty = document.createElement('p'); empty.className = 'empty'; empty.textContent = 'None indexed'; details.append(empty); return; }
+        const list = document.createElement('div'); list.className = 'chips';
+        values.forEach(value => { const chip = document.createElement('span'); chip.className = 'chip'; chip.textContent = text(value); list.append(chip); });
+        details.append(list);
+      }
+      function showNode(node) {
+        const data = node.data();
+        byId('detail-title').textContent = data.label;
+        byId('detail-description').textContent = data.in_cycle ? 'Repository participates in a dependency cycle.' : 'Repository architecture and coupling.';
+        clearDetails();
+        addMetric('Incoming repositories (Ca)', data.afferent_coupling);
+        addMetric('Outgoing repositories (Ce)', data.efferent_coupling);
+        addMetric('Instability', Number(data.instability).toFixed(2));
+        addMetric('Code signatures', data.signatures);
+        addMetric('Contracts', data.contracts);
+        addChips('Languages', data.languages);
+        addChips('Technologies', data.technologies);
+      }
+      function showEdge(edge) {
+        const data = edge.data();
+        byId('detail-title').textContent = `${data.source} → ${data.target}`;
+        byId('detail-description').textContent = data.in_cycle ? 'Dependency in a circular path.' : 'Directional repository dependency.';
+        clearDetails();
+        addMetric('References', data.weight);
+        Object.entries(data.edge_types || {}).forEach(([kind, count]) => addMetric(kind, count));
+        addChips('Referenced symbols', data.symbols);
+      }
+      function renderRepoList(matches) {
+        const list = byId('repo-list');
+        list.replaceChildren();
+        const sorted = Array.from(matches).sort((left, right) => left.id().localeCompare(right.id()));
+        if (!sorted.length) {
+          const item = document.createElement('li');
+          item.className = 'empty';
+          item.textContent = 'No matching repositories';
+          item.style.padding = '12px';
+          list.append(item);
+        }
+        sorted.forEach(node => {
+          const item = document.createElement('li');
+          const button = document.createElement('button');
+          button.type = 'button';
+          button.textContent = node.id();
+          button.setAttribute('aria-current', text(node.id() === selectedRepo));
+          if (node.data('in_cycle')) {
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.textContent = 'Cycle';
+            button.append(badge);
+          }
+          button.addEventListener('click', () => selectNode(node));
+          item.append(button);
+          list.append(item);
+        });
+        byId('list-status').textContent = `${sorted.length} of ${cy.nodes().length} repositories shown`;
+      }
+      function selectNode(node) {
+        selectedRepo = node.id();
+        showNode(node);
+        cy.elements().removeClass('focused');
+        node.addClass('focused');
+        node.neighborhood().addClass('focused');
+        cy.center(node);
+        byId('repo-list').querySelectorAll('button').forEach(button => {
+          button.setAttribute('aria-current', text(button.firstChild.textContent === selectedRepo));
+        });
+      }
+      function selectEdge(edge) {
+        selectedRepo = null;
+        showEdge(edge);
+        cy.elements().removeClass('focused');
+        edge.addClass('focused');
+        byId('repo-list').querySelectorAll('button').forEach(button => button.setAttribute('aria-current', 'false'));
+      }
+      function refreshFocus() {
+        const search = byId('search').value.trim().toLocaleLowerCase();
+        const cycleOnly = byId('cycles-only').checked;
+        const weight = Math.max(1, Number(byId('weight-number').value) || 1);
+        cy.edges().forEach(edge => edge.style('display', edge.data('weight') >= weight ? 'element' : 'none'));
+        const matches = cy.nodes().filter(node => (!search || node.id().toLocaleLowerCase().includes(search)) && (!cycleOnly || node.data('in_cycle')));
+        cy.elements().removeClass('faded focused');
+        if (search || cycleOnly) {
+          cy.elements().addClass('faded');
+          matches.removeClass('faded').addClass('focused');
+          matches.connectedEdges().filter(edge => edge.style('display') !== 'none').removeClass('faded');
+        }
+        renderRepoList(matches);
+        byId('canvas-note').textContent = matches.length ? `${matches.length} of ${cy.nodes().length} repositories in focus` : 'No repositories match the current filters';
+      }
+      cy.on('tap', 'node', event => selectNode(event.target));
+      cy.on('tap', 'edge', event => selectEdge(event.target));
+      cy.on('tap', event => { if (event.target === cy) refreshFocus(); });
+      byId('search').addEventListener('input', refreshFocus);
+      byId('cycles-only').addEventListener('change', refreshFocus);
+      byId('weight').addEventListener('input', () => { byId('weight-number').value = byId('weight').value; refreshFocus(); });
+      byId('weight-number').addEventListener('change', () => {
+        byId('weight-number').value = text(Math.min(maxWeight, Math.max(1, Number(byId('weight-number').value) || 1)));
+        byId('weight').value = byId('weight-number').value;
+        refreshFocus();
+      });
+      byId('layout').addEventListener('change', () => cy.layout({ name: byId('layout').value, animate: false, fit: true, padding: 40 }).run());
+      byId('fit').addEventListener('click', () => cy.fit(undefined, 40));
+      byId('reset').addEventListener('click', () => {
+        byId('search').value = ''; byId('cycles-only').checked = false;
+        byId('weight').value = '1'; byId('weight-number').value = '1';
+        byId('layout').value = 'cose';
+        selectedRepo = null;
+        byId('detail-title').textContent = 'Topology details';
+        byId('detail-description').textContent = 'Select a repository or dependency arrow to inspect its metrics.';
+        clearDetails();
+        cy.layout({ name: 'cose', animate: false, fit: true, padding: 40 }).run();
+        refreshFocus();
+      });
+      refreshFocus();
+    })();
+  </script>
+</body>
+</html>

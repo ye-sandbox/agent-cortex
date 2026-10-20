@@ -108,6 +108,16 @@ uv run cortex search "deals pagination endpoint" --category contract --limit 3
 uv run cortex search "SSE streaming retry" --json
 ```
 
+### Interactive Topology Dashboard
+
+Create a single HTML file containing the current portfolio dependency graph:
+
+```bash
+uv run cortex topology dashboard
+```
+
+Open the generated file at `~/.local/share/agent-cortex/exports/topology-dashboard.html` in a browser. The dashboard works offline and lets you search repositories, filter by edge weight, focus on dependency cycles, change layouts, and inspect node and edge details. Its data is a snapshot; rerun the command after syncing to refresh it. Use `--output /path/to/dashboard.html` to choose another destination, `--min-weight N` to exclude lighter dependencies, or `--remote` with `--hub-url` to query a remote hub. Dashboard exports can contain repository names and dependency symbols, so keep them outside public Git repositories.
+
 ---
 
 ## 🤖 Model Context Protocol (MCP) Integration
