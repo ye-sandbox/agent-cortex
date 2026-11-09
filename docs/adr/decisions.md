@@ -149,3 +149,35 @@ type: architectural-decision-log
 - **Context:** Engineers need to inspect the exported portfolio topology interactively without running a web service or exposing indexed graph data to a CDN.
 - **Decision:** Add `cortex topology dashboard` as a snapshot export. It uses the existing `PortfolioTopologyGraph` and Cytoscape element schema, embeds a pinned Cytoscape.js browser asset and escaped graph JSON in one HTML file, and writes by default to `~/.local/share/agent-cortex/exports/`. Local and remote graph retrieval both use `CortexClient`.
 - **Consequences:** The generated dashboard works offline with zero process overhead at rest. The packaged browser asset adds roughly 436 KB uncompressed to the distribution. Snapshots must be regenerated after topology changes, and their destination should remain outside public source repositories.
+
+---
+
+# [ADR-000] [Architectural Decision Title]
+
+- **Status:** [Proposed | Approved | Rejected | Deprecated]
+- **Date:** [YYYY-MM-DD]
+- **Author(s):** [Name / Team]
+
+---
+
+## 1. Context and Problem Statement
+[Describe the context, conflicting forces, technical requirements, or business constraints that drove this decision.]
+
+## 2. Decision Outcome
+[Describe the chosen architectural solution or standard clearly and objectively.]
+
+## 3. Alternatives Considered
+- **Alternative A:** [Description and reason for rejection]
+- **Alternative B:** [Description and reason for rejection]
+
+## 4. Consequences and Trade-offs
+### Positive
+- [Benefit 1]
+- [Benefit 2]
+
+### Negative / Accepted Risks
+- [Trade-off or added complexity 1]
+- [Mitigation plan if applicable]
+
+## 5. References and Links
+- [Link or reference to related docs/discussions]

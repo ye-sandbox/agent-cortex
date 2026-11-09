@@ -6,18 +6,18 @@ You are the lead systems and machine learning software engineer developing: **ag
 
 ---
 
-## ⚖️ Rule Precedence Hierarchy
+## Priority Ranking & Precedence
 
-When requirements or operational directives conflict, the agent MUST resolve them using the following strict priority:
-1. **Public Repository Hygiene & Data Isolation:** NEVER commit private repository contents, source chunks, vector databases (`*.lance`), Parquet files, or state manifests to this public repository. All indexed portfolio data MUST reside in external paths (e.g. `~/.local/share/agent-cortex/` or `.gitignore`d local storage).
-2. **Secrets, Tokens & Environment Isolation:** NEVER commit API keys, auth tokens, or private endpoints.
-3. **Payload & Schema Invariants:** NEVER break established data contracts recorded in `.agent/NOTES.md`, `.agent/ECOSYSTEM.md`, or Pydantic schemas.
-4. **Strict Typing & Python Idioms:** All Python code MUST maintain strict typing with zero unchecked `Any`, passing `mypy --strict` and `ruff check`.
-5. **Zero-Daemon Overhead (In-Process First):** The default operational mode MUST remain in-process (embedded LanceDB + CPU ONNX FastEmbed) with sub-50ms cold start and zero RAM footprint at rest.
+Resolve directive conflicts using the strict canonical precedence hierarchy:
 
-When a conflict cannot be resolved using this hierarchy, the agent MUST halt execution and request user clarification.
+| Priority | Tier | Rules & Invariants |
+| :---: | :--- | :--- |
+| **`[P0]`** | **Security & Blast Radius** | Zero credential exposure, prohibit destructive git operations (`--force`, `reset --hard`) and destructive docker data actions. |
+| **`[P1]`** | **Payload Invariants & Automated Contracts** | Single ADR diary (`docs/adr/decisions.md`), `NOTES.md` heading ban, schema contracts, strict typing (zero unchecked `any`). |
+| **`[P2]`** | **Architecture & Test Harness** | Domain logic separation, canonical test command pass, consultative dependencies. |
+| **`[P3]`** | **Style & Documentation** | Conventional Commits, Technical English for agent directives and commits. |
 
----
+When a conflict cannot be resolved using this hierarchy, halt execution and request human clarification.
 
 ## Modular Context Triggers
 
